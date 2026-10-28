@@ -29,7 +29,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="3.0")
+app = FastAPI(title="Artemis IA Terminal API", version="4.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -251,12 +251,19 @@ def stooq_history(sym: str) -> dict:
     return {"t": T[-1300:], "c": C[-1300:], "at": int(time.time() * 1000), "src": "stooq"}
 
 # ----------------------------------------------------------------- routes
-QUOTE_TTL = 10.0
+QUOTE_TTL = 20.0
 HIST_TTL = 900.0
 CONS_TTL = 21600.0
 
 def chunks(a, n):
     return [a[i:i + n] for i in range(0, len(a), n)]
+
+def _safe_spark(grp: List[str]) -> Dict[str, dict]:
+    try:
+        return yh_spark(grp)
+    except Exception:
+        return {}
+
 
 @app.get("/api/quotes")
 def quotes(symbols: str = Query(..., description="liste separee par des virgules")):
@@ -269,17 +276,18 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     if not todo:
         return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
-    for grp in chunks(todo, 50):
-        try:
-            out.update(yh_spark(grp))
-        except Exception:
-            pass
+    try:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for res in pool.map(_safe_spark, chunks(todo, 50)):
+                out.update(res)
+    except Exception:
+        pass
 
     missing = [s for s in todo if s not in out]
     if missing:
         try:
-            with ThreadPoolExecutor(max_workers=10) as pool:
-                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:120])):
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:80])):
                     if rec:
                         out[sym] = rec
         except Exception:
