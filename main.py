@@ -27,9 +27,10 @@ from typing import Any, Dict, List, Optional
 import requests
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="4.0")
+app = FastAPI(title="Artemis IA Terminal API", version="5.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -403,10 +404,113 @@ def diag():
         report["yahoo_raw_status"] = f"{type(exc).__name__}"
     return JSONResponse(report, headers={"Cache-Control": "no-store"})
 
+
+ICON_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">'
+    '<rect width="512" height="512" rx="112" fill="#050607" stroke="#8a5a14" stroke-width="8"/>'
+    '<text x="256" y="268" font-family="monospace" font-size="248" font-weight="700"'
+    ' fill="#ffa028" text-anchor="middle">A</text>'
+    '<path d="M112 410 L170 380 L228 396 L286 344 L344 366 L402 300"'
+    ' fill="none" stroke="#00d46a" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>'
+    '<circle cx="402" cy="300" r="18" fill="#00d46a"/></svg>'
+)
+
+MANIFEST_JSON = {
+    "name": "ARTEMIS IA TERMINAL",
+    "short_name": "ARTEMIS IA",
+    "id": "/",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#ffa028",
+    "lang": "fr",
+    "icons": [
+        {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
+        {"src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable"},
+    ],
+}
+
+SW_JS = """
+const CACHE = "artemis-ia-v5";
+const SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", (e) => {
+  e.waitUntil(caches.keys()
+    .then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", (e) => {
+  const req = e.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/") || url.pathname === "/health") return;
+  if (req.mode === "navigate") {
+    e.respondWith(fetch(req).then((r) => {
+      const copy = r.clone();
+      caches.open(CACHE).then((c) => c.put("/", copy));
+      return r;
+    }).catch(() => caches.match("/").then((r) => r || Response.error())));
+    return;
+  }
+  e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
+});
+"""
+
+PWA_HEAD = (
+    '<link rel="manifest" href="/manifest.webmanifest">'
+    '<meta name="theme-color" content="#ffa028">'
+    '<link rel="icon" type="image/svg+xml" href="/icon.svg">'
+    '<link rel="apple-touch-icon" href="/icon.svg">'
+    '<meta name="apple-mobile-web-app-capable" content="yes">'
+    '<meta name="mobile-web-app-capable" content="yes">'
+    '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
+    '<meta name="apple-mobile-web-app-title" content="ARTEMIS IA">'
+)
+
+PWA_TAIL = (
+    "<script>if(location.protocol.indexOf('http')===0&&'serviceWorker' in navigator){"
+    "window.addEventListener('load',function(){"
+    "navigator.serviceWorker.register('/sw.js').catch(function(){});});}</script>"
+)
+
+
+def page_html() -> str:
+    """Sert la page en corrigeant au vol ce qui doit l'etre, sans dependre du fichier depose."""
+    with open(PAGE, "r", encoding="utf-8") as fh:
+        html = fh.read()
+    html = html.replace(",12000)", ",60000)")
+    html = html.replace(",25000)", ",60000)")
+    if "manifest.webmanifest" not in html:
+        html = html.replace("</head>", PWA_HEAD + "</head>", 1)
+        html = html.replace("</body>", PWA_TAIL + "</body>", 1)
+    return html
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return JSONResponse(MANIFEST_JSON, media_type="application/manifest+json")
+
+
+@app.get("/icon.svg")
+def icon_svg():
+    return Response(ICON_SVG, media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/sw.js")
+def service_worker():
+    return Response(SW_JS, media_type="application/javascript",
+                    headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
+
+
 @app.get("/")
 def index():
     if os.path.exists(PAGE):
-        return FileResponse(PAGE, media_type="text/html")
+        return HTMLResponse(page_html())
     return JSONResponse({"ok": True, "msg": "Poser ARTEMIS_IA_TERMINAL.html a cote de main.py."})
 
 @app.get("/health")
