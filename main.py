@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="5.0")
+app = FastAPI(title="Artemis IA Terminal API", version="5.1")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -63,9 +63,9 @@ def cache_put(key: str, value):
         _cache[key] = (time.time(), value)
 
 # ----------------------------------------------------------------- Yahoo direct
-def yh(path: str, params: dict, timeout: float = 12.0):
+def yh(path: str, params: dict, timeout: float = 12.0, hosts=None):
     last = "aucune tentative"
-    for host in YH_HOSTS:
+    for host in (hosts or YH_HOSTS):
         try:
             r = S.get(host + path, params=params, timeout=timeout)
             if r.status_code == 200:
@@ -137,7 +137,8 @@ def yh_spark(syms: List[str]) -> Dict[str, dict]:
 def yh_quote_via_chart(sym: str) -> Optional[dict]:
     """Repli unitaire : l'endpoint chart porte le meta complet (cours, volume, bornes)."""
     try:
-        j = yh("/v8/finance/chart/" + sym, {"range": "1d", "interval": "5m"}, timeout=9.0)
+        j = yh("/v8/finance/chart/" + sym, {"range": "1d", "interval": "5m"},
+               timeout=5.0, hosts=YH_HOSTS[:1])
         res = (j.get("chart") or {}).get("result") or []
         if not res:
             return None
@@ -253,6 +254,7 @@ def stooq_history(sym: str) -> dict:
 
 # ----------------------------------------------------------------- routes
 QUOTE_TTL = 20.0
+FAIL_TTL = 900.0  # un symbole introuvable n'est pas retente avant ce delai
 HIST_TTL = 900.0
 CONS_TTL = 21600.0
 
@@ -273,7 +275,10 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     todo: List[str] = []
     for s in syms:
         hit = cache_get("q:" + s, QUOTE_TTL)
-        (out.__setitem__(s, hit) if hit else todo.append(s))
+        if hit:
+            out[s] = hit
+        elif cache_get("x:" + s, FAIL_TTL) is None:
+            todo.append(s)
     if not todo:
         return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
@@ -288,7 +293,7 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     if missing:
         try:
             with ThreadPoolExecutor(max_workers=16) as pool:
-                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:80])):
+                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:40])):
                     if rec:
                         out[sym] = rec
         except Exception:
@@ -303,6 +308,9 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     for s in todo:
         if s in out:
             cache_put("q:" + s, out[s])
+        else:
+            # introuvable chez la source : on cesse de le redemander a chaque cycle
+            cache_put("x:" + s, True)
     return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
 RANGE_MAP = {"1d": ("1d", "5m"), "5d": ("5d", "30m"), "1mo": ("1mo", "1d"),
