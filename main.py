@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="5.1")
+app = FastAPI(title="Artemis IA Terminal API", version="5.2")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -290,10 +290,13 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
         pass
 
     missing = [s for s in todo if s not in out]
+    tried = set()
     if missing:
+        batch = missing[:60]
+        tried.update(batch)
         try:
             with ThreadPoolExecutor(max_workers=16) as pool:
-                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:40])):
+                for sym, rec in zip(batch, pool.map(yh_quote_via_chart, batch)):
                     if rec:
                         out[sym] = rec
         except Exception:
@@ -308,8 +311,8 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     for s in todo:
         if s in out:
             cache_put("q:" + s, out[s])
-        else:
-            # introuvable chez la source : on cesse de le redemander a chaque cycle
+        elif s in tried:
+            # teste et introuvable : on cesse de le redemander a chaque cycle
             cache_put("x:" + s, True)
     return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
