@@ -4,6 +4,8 @@ ARTEMIS IA TERMINAL - backend de donnees (v2)
 Sert le terminal et son flux de marche depuis la meme origine, ce qui supprime
 tout probleme de CORS et autorise un rafraichissement a 15 secondes.
 
+v3 : cotations groupees via spark (deux formats acceptes), repli unitaire
+via l'endpoint chart en parallele, puis Stooq.
 v2 : appels Yahoo en direct (sans passer par le bootstrap cookie de yfinance,
 qui echoue depuis les IP de datacenter), repli sur Stooq, puis sur yfinance.
 L'endpoint /api/diag indique quelle source repond depuis l'hebergeur.
@@ -19,6 +21,7 @@ import io
 import os
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -26,7 +29,7 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="2.0")
+app = FastAPI(title="Artemis IA Terminal API", version="3.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -71,34 +74,86 @@ def yh(path: str, params: dict, timeout: float = 12.0):
             last = f"{host.split('//')[1][:7]} {type(exc).__name__}"
     raise RuntimeError(last)
 
+def _spark_row(sym, r, out):
+    """Accepte les deux formats renvoyes par Yahoo : objet a plat, ou imbrique."""
+    if not isinstance(r, dict):
+        return
+    meta = None
+    resp = r.get("response")
+    if isinstance(resp, list) and resp:
+        meta = resp[0].get("meta") or {}
+    sym = r.get("symbol") or sym or (meta or {}).get("symbol")
+    if not sym:
+        return
+    closes = r.get("close")
+    if closes is None and isinstance(resp, list) and resp:
+        try:
+            closes = (resp[0].get("indicators", {}).get("quote") or [{}])[0].get("close")
+        except Exception:
+            closes = None
+    last = (meta or {}).get("regularMarketPrice")
+    if last is None and isinstance(closes, list):
+        for v in reversed(closes):
+            if v is not None:
+                last = v
+                break
+    if last is None:
+        return
+    pc = r.get("chartPreviousClose")
+    if pc is None:
+        pc = r.get("previousClose")
+    if pc is None and meta:
+        pc = meta.get("chartPreviousClose") or meta.get("previousClose")
+    out[sym] = {
+        "p": float(last),
+        "pc": _f(pc),
+        "vol": _f((meta or {}).get("regularMarketVolume")),
+        "hi": _f((meta or {}).get("regularMarketDayHigh")),
+        "lo": _f((meta or {}).get("regularMarketDayLow")),
+        "op": None,
+        "cur": (meta or {}).get("currency"),
+        "t": int(time.time() * 1000),
+        "src": "yahoo",
+    }
+
+
 def yh_spark(syms: List[str]) -> Dict[str, dict]:
     j = yh("/v8/finance/spark",
            {"symbols": ",".join(syms), "range": "1d", "interval": "5m"})
-    rows = j.get("spark", {}).get("result", j) if isinstance(j, dict) else j
     out: Dict[str, dict] = {}
-    seq = rows if isinstance(rows, list) else list(rows.values()) if isinstance(rows, dict) else []
-    for r in seq:
-        try:
-            resp = (r.get("response") or [{}])[0]
-            meta = resp.get("meta") or {}
-            sym = r.get("symbol") or meta.get("symbol")
-            last = meta.get("regularMarketPrice")
-            if sym is None or last is None:
-                continue
-            out[sym] = {
-                "p": float(last),
+    if isinstance(j, dict) and "spark" in j:
+        for r in (j.get("spark") or {}).get("result") or []:
+            _spark_row(None, r, out)
+    elif isinstance(j, dict):
+        for k, v in j.items():
+            _spark_row(k, v, out)
+    elif isinstance(j, list):
+        for r in j:
+            _spark_row(None, r, out)
+    return out
+
+
+def yh_quote_via_chart(sym: str) -> Optional[dict]:
+    """Repli unitaire : l'endpoint chart porte le meta complet (cours, volume, bornes)."""
+    try:
+        j = yh("/v8/finance/chart/" + sym, {"range": "1d", "interval": "5m"}, timeout=9.0)
+        res = (j.get("chart") or {}).get("result") or []
+        if not res:
+            return None
+        meta = res[0].get("meta") or {}
+        last = meta.get("regularMarketPrice")
+        if last is None:
+            return None
+        return {"p": float(last),
                 "pc": _f(meta.get("chartPreviousClose") or meta.get("previousClose")),
                 "vol": _f(meta.get("regularMarketVolume")),
                 "hi": _f(meta.get("regularMarketDayHigh")),
                 "lo": _f(meta.get("regularMarketDayLow")),
-                "op": None,
-                "cur": meta.get("currency"),
-                "t": int(time.time() * 1000),
-                "src": "yahoo",
-            }
-        except Exception:
-            continue
-    return out
+                "op": None, "cur": meta.get("currency"),
+                "t": int(time.time() * 1000), "src": "yahoo-chart"}
+    except Exception:
+        return None
+
 
 def yh_chart(sym: str, rng: str, interval: str) -> dict:
     j = yh(f"/v8/finance/chart/{sym}", {"range": rng, "interval": interval})
@@ -223,6 +278,15 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     missing = [s for s in todo if s not in out]
     if missing:
         try:
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                for sym, rec in zip(missing, pool.map(yh_quote_via_chart, missing[:120])):
+                    if rec:
+                        out[sym] = rec
+        except Exception:
+            pass
+    missing = [s for s in todo if s not in out]
+    if missing:
+        try:
             out.update(stooq_quotes(missing))
         except Exception:
             pass
@@ -300,6 +364,18 @@ def diag():
                                  "sample": {k: v["p"] for k, v in list(q.items())[:3]}}
     except Exception as exc:
         report["yahoo_spark"] = {"ok": False, "err": str(exc)[:160]}
+    try:
+        raw = yh("/v8/finance/spark",
+                 {"symbols": "AAPL,MC.PA", "range": "1d", "interval": "5m"})
+        report["spark_shape"] = {"type": type(raw).__name__,
+                                 "keys": list(raw)[:6] if isinstance(raw, dict) else len(raw)}
+    except Exception as exc:
+        report["spark_shape"] = str(exc)[:120]
+    try:
+        r = yh_quote_via_chart("MC.PA")
+        report["chart_quote"] = r or "vide"
+    except Exception as exc:
+        report["chart_quote"] = str(exc)[:160]
     try:
         h = yh_chart("AAPL", "1mo", "1d")
         report["yahoo_chart"] = {"ok": bool(h["c"]), "points": len(h["c"])}
