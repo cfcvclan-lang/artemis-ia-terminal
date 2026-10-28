@@ -123,6 +123,12 @@ td.spk-td{padding:0 6px;width:80px}
 .chc .pc{font-size:12px;font-weight:700;flex:0 0 auto}
 .chc .ft{display:flex;justify-content:space-between;font-size:10px;color:var(--fg-dim)}
 .chc svg{width:100%;height:auto;display:block}
+.chc.nf{opacity:.55}
+.nfbox{display:flex;align-items:center;justify-content:center;height:62px;border:1px dashed var(--grid2);
+  color:var(--fg-dim);font-size:10.5px;letter-spacing:.04em}
+tr.nf td{color:var(--fg-dim)}
+tr.nf td:first-child{color:var(--fg-dim)}
+tr.nf .pill{color:var(--fg-dim)}
 .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--flat)}
 td.px{color:var(--fg);font-weight:600}
 @keyframes flashUp{0%{background:rgba(0,212,106,.35)}100%{background:transparent}}
@@ -302,8 +308,8 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
 <script>
 (function(){
 "use strict";
-/* ARTEMIS IA TERMINAL - univers repris de la watchlist Investing.com */
-const U = (n,y,c,t)=>({n,y,c:c||'EUR',t:t||'EQ'});
+/* ARTX UNIVERSE : portefeuilles repris de la watchlist Investing.com */
+const U = (n,y,c,t,nf)=>({n,y,c:c||'EUR',t:t||'EQ',nf:nf?1:0});
 const UNIVERSE = {
 "INDEX":[
 U("CAC 40","^FCHI","EUR","IX"),U("SBF 120","^SBF120","EUR","IX"),U("Euro Stoxx 50","^STOXX50E","EUR","IX"),
@@ -418,9 +424,65 @@ U("Unibail-Rodamco","URW.AS"),U("Klepierre","LI.PA")],
 U("AeroVironment","AVAV","USD"),U("Embraer ADR","ERJ","USD"),U("Hensoldt","HAG.DE"),U("Airbus","AIR.PA"),
 U("RTX Corp","RTX","USD"),U("BAE Systems","BA.L","GBP"),U("Palantir","PLTR","USD"),U("Safran","SAF.PA"),
 U("Rheinmetall","RHM.DE"),U("Rolls-Royce","RR.L","GBP"),U("Thales","HO.PA"),U("Leonardo","LDO.MI"),
-U("Dassault Aviation","AM.PA"),U("Dassault Systemes","DSY.PA")]
+U("Dassault Aviation","AM.PA"),U("Dassault Systemes","DSY.PA")],
+"OVERALL":[
+U("Constellation Energy","CEG","USD","EQ"),U("BlackBerry","BB","USD","EQ"),U("Dell Tech","DELL","USD","EQ"),
+U("Palantir Tech A","PLTR","USD","EQ"),U("Meta Platforms","META","USD","EQ"),U("Neutron Holdings","ND:NEUTRON_HOLDINGS","USD","EQ",1),
+U("Microsoft","MSFT","USD","EQ"),U("IBM","IBM","USD","EQ"),U("Marvell","MRVL","USD","EQ"),
+U("Super Micro Computer","SMCI","USD","EQ"),U("SanDisk","SNDK","USD","EQ"),U("Micron","MU","USD","EQ"),
+U("Intel","INTC","USD","EQ"),U("Nexans SA","NEX.PA","EUR","EQ"),U("Prysmian","PRY.MI","EUR","EQ"),
+U("Nebius NV","NBIS","USD","EQ"),U("CoreWeave","CRWV","USD","EQ"),U("Bloom Energy","BE","USD","EQ"),
+U("Repsol","REP.MC","EUR","EQ"),U("Schneider Electric","SU.PA","EUR","EQ"),U("Legrand","LR.PA","EUR","EQ"),
+U("Cameco","CCJ","USD","EQ"),U("Alstom","ALO.PA","EUR","EQ"),U("Tesla","TSLA","USD","EQ"),
+U("Alphabet C","GOOG","USD","EQ"),U("Apple","AAPL","USD","EQ"),U("Innodata","INOD","USD","EQ"),
+U("D Wave Quantum","QBTS","USD","EQ"),U("IONQ","IONQ","USD","EQ"),U("Lumentum Holdings","LITE","USD","EQ"),
+U("Applied Opt","AAOI","USD","EQ"),U("Rigetti Computing","RGTI","USD","EQ"),U("STOXX Europe 600 Utilities","^SX6P","EUR","IX"),
+U("SK hynix DR","ND:SK_HYNIX_DR","USD","EQ",1),U("KOSPI 50","ND:KOSPI_50","KRW","IX",1),U("MiniMax","0100.HK","HKD","EQ"),
+U("Samsung Electronics Co","005930.KS","KRW","EQ"),U("SK Hynix","000660.KS","KRW","EQ"),U("Stoxx 600 Personal Goods PR","^SXQP","EUR","IX"),
+U("Stoxx 600 Automobiles & Parts","^SXAP","EUR","IX"),U("Xtrackers MSCI World Energy","XDW0.DE","EUR","ET"),U("iShares MSCI Emerging Markets","EEM","USD","ET"),
+U("STOXX Banks EUR Price","^SX7E","EUR","IX"),U("S&P 500 Energy","^SP500-10","USD","IX"),U("STOXX Europe 600 Oil & Gas","^SXEP","EUR","IX"),
+U("Stoxx 600 Banks PR","^SX7P","EUR","IX"),U("Gaz naturel","NG=F","USD","CO"),U("Petrole brut WTI","CL=F","USD","CO"),
+U("Petrole Brent","BZ=F","USD","CO"),U("Gazprom PJSC","GAZP.ME","RUB","EQ"),U("Saint-Gobain","SGO.PA","EUR","EQ"),
+U("Roche Holding Participation","ROG.SW","CHF","EQ"),U("Novartis","NOVN.SW","CHF","EQ"),U("Pfizer","PFE","USD","EQ"),
+U("AstraZeneca","AZN.L","GBP","EQ"),U("Bayer","BAYN.DE","EUR","EQ"),U("Pernod Ricard","RI.PA","EUR","EQ"),
+U("Ferrari NV","RACE.MI","EUR","EQ"),U("Rolls-Royce Holdings","RR.L","GBP","EQ"),U("BBVA","BBVA.MC","EUR","EQ"),
+U("Santander","SAN.MC","EUR","EQ"),U("Barclays","BARC.L","GBP","EQ"),U("Wells Fargo","WFC","USD","EQ"),
+U("Lazard","LAZ","USD","EQ"),U("Morgan Stanley","MS","USD","EQ"),U("Palladium","PA=F","USD","CO"),
+U("Platine","PL=F","USD","CO"),U("Cuivre","HG=F","USD","CO"),U("Argent","SI=F","USD","CO"),
+U("Or","GC=F","USD","CO"),U("Equinox Gold","EQX","USD","EQ"),U("Barrick Mining","B","USD","EQ"),
+U("Newmont","NEM","USD","EQ"),U("Pan American Silver","PAAS","USD","EQ"),U("Agnico Eagle Mines","AEM","USD","EQ"),
+U("Verbund","VER.VI","EUR","EQ"),U("Saudi Aramco","2222.SR","SAR","EQ"),U("Cummins","CMI","USD","EQ"),
+U("ABB","ABBN.SW","CHF","EQ"),U("ACS","ACS.MC","EUR","EQ"),U("Equinor","EQNR.OL","NOK","EQ"),
+U("Assicurazioni Generali","G.MI","EUR","EQ"),U("AXA","CS.PA","EUR","EQ"),U("Allianz","ALV.DE","EUR","EQ"),
+U("Stellantis NV","STLAM.MI","EUR","EQ"),U("ASML Holding","ASML.AS","EUR","EQ"),U("Leonardo","LDO.MI","EUR","EQ"),
+U("Bouygues","EN.PA","EUR","EQ"),U("Commerzbank","CBK.DE","EUR","EQ"),U("Deutsche Bank","DBK.DE","EUR","EQ"),
+U("Taiwan Semiconductor","TSM","USD","EQ"),U("Broadcom","AVGO","USD","EQ"),U("UnitedHealth","UNH","USD","EQ"),
+U("Snowflake","SNOW","USD","EQ"),U("Sanofi","SAN.PA","EUR","EQ"),U("Eli Lilly","LLY","USD","EQ"),
+U("Air France - KLM SA","AF.PA","EUR","EQ"),U("Siemens Energy AG","ENR.DE","EUR","EQ"),U("TotalEnergies SE","TTE.PA","EUR","EQ"),
+U("Veolia","VIE.PA","EUR","EQ"),U("Engie","ENGI.PA","EUR","EQ"),U("Air Liquide","AI.PA","EUR","EQ"),
+U("Airbus","AIR.PA","EUR","EQ"),U("Richemont","CFR.SW","CHF","EQ"),U("Hermes International","RMS.PA","EUR","EQ"),
+U("EssilorLuxottica","EL.PA","EUR","EQ"),U("Kering","KER.PA","EUR","EQ"),U("LVMH","MC.PA","EUR","EQ"),
+U("UniCredit","UCG.MI","EUR","EQ"),U("Credit Agricole","ACA.PA","EUR","EQ"),U("Societe Generale","GLE.PA","EUR","EQ"),
+U("BNP Paribas","BNP.PA","EUR","EQ"),U("Dassault Systemes","DSY.PA","EUR","EQ"),U("Dassault Aviation","AM.PA","EUR","EQ"),
+U("Thales","HO.PA","EUR","EQ"),U("Carrefour","CA.PA","EUR","EQ"),U("Vinci","DG.PA","EUR","EQ"),
+U("Safran","SAF.PA","EUR","EQ"),U("Novo Nordisk DR","NVO","USD","EQ"),U("Moncler SpA","MONC.MI","EUR","EQ"),
+U("Telecom Italia","TIT.MI","EUR","EQ"),U("Capgemini","CAP.PA","EUR","EQ"),U("Publicis","PUB.PA","EUR","EQ"),
+U("Rio Tinto ADR","RIO","USD","EQ"),U("Eramet","ERA.PA","EUR","EQ"),U("Glencore","GLEN.L","GBP","EQ"),
+U("ArcelorMittal","MT.AS","EUR","EQ"),U("ASML ADR","ASML","USD","EQ"),U("Oracle","ORCL","USD","EQ"),
+U("Goldman Sachs","GS","USD","EQ"),U("Exxon Mobil","XOM","USD","EQ"),U("General Motors","GM","USD","EQ"),
+U("GE Aerospace","GE","USD","EQ"),U("Ford Motor","F","USD","EQ"),U("NVIDIA","NVDA","USD","EQ"),
+U("Alphabet A","GOOGL","USD","EQ"),U("Boyd Gaming","BYD","USD","EQ"),U("JPMorgan","JPM","USD","EQ"),
+U("ConocoPhillips","COP","USD","EQ"),U("Chevron","CVX","USD","EQ"),U("Allemagne 2A","ND:ALLEMAGNE_2A","%","RT",1),
+U("Allemagne 10A","ND:ALLEMAGNE_10A","%","RT",1),U("Etats-Unis 10A","^TNX","%","RT"),U("Etats-Unis 2A","ND:ETATS-UNIS_2A","%","RT",1),
+U("France 10A","ND:FRANCE_10A","%","RT",1),U("France 2A","ND:FRANCE_2A","%","RT",1),U("France 1A","ND:FRANCE_1A","%","RT",1),
+U("EUR IRS 2 ans","ND:EUR_IRS_2_ANS","%","RT",1),U("EUR IRS 1 an","ND:EUR_IRS_1_AN","%","RT",1),U("EUR IRS 10 ans","ND:EUR_IRS_10_ANS","%","RT",1),
+U("EUR/CHF","EURCHF=X","CHF","FX"),U("EUR/USD","EURUSD=X","USD","FX"),U("USD/JPY","USDJPY=X","JPY","FX"),
+U("GBP/USD","GBPUSD=X","USD","FX"),U("DAX","^GDAXI","EUR","IX"),U("Nikkei 225","^N225","JPY","IX"),
+U("Nasdaq 100","^NDX","USD","IX"),U("S&P 500","^GSPC","USD","IX"),U("FTSE 100","^FTSE","GBP","IX"),
+U("SMI","^SSMI","CHF","IX"),U("IBEX 35","^IBEX","EUR","IX"),U("SBF 120","^SBF120","EUR","IX"),
+U("Euro Stoxx 50","^STOXX50E","EUR","IX"),U("EURO STOXX Oil & Gas NR","ND:EURO_STOXX_OIL_&_GAS_NR","EUR","IX",1),U("EURO STOXX Oil & Gas","^SXEE","EUR","IX"),
+U("SpaceX","ND:SPACEX","USD","EQ",1),U("CXMT","ND:CXMT","CNY","EQ",1)]
 };
-
 /* ===================== etat ===================== */
 var LS="artemis.ia.term.v1";
 var cfg={src:"auto",base:"",tab:"INDEX",view:"mon",hmw:"d",range:"ytd",sort:"d",dir:-1,q:""};
@@ -428,11 +490,6 @@ try{var raw=localStorage.getItem(LS); if(raw) Object.assign(cfg,JSON.parse(raw))
 function save(){try{localStorage.setItem(LS,JSON.stringify(cfg));}catch(e){}}
 
 var TABS=Object.keys(UNIVERSE);
-(function(){
-  var seen={},all=[];
-  TABS.forEach(function(k){UNIVERSE[k].forEach(function(o){if(!seen[o.y]){seen[o.y]=1;all.push(o);}});});
-  UNIVERSE["OVERALL"]=all; TABS.push("OVERALL");
-})();
 if(TABS.indexOf(cfg.tab)<0) cfg.tab=TABS[0];
 
 var SYMS=Object.keys(UNIVERSE).reduce(function(a,k){UNIVERSE[k].forEach(function(o){a[o.y]=o;});return a;},{});
@@ -559,10 +616,11 @@ function consDemo(y){
 
 /* ===================== moteur ===================== */
 function currentList(){ return UNIVERSE[cfg.tab]||[]; }
+function nofeed(y){ var o=SYMS[y]; return !!(o&&o.nf); }
 function activeSyms(){
-  var m={}; currentList().forEach(function(o){m[o.y]=1;});
-  if(sel) m[sel]=1;
-  UNIVERSE["INDEX"].slice(0,12).forEach(function(o){m[o.y]=1;});
+  var m={}; currentList().forEach(function(o){ if(!o.nf) m[o.y]=1; });
+  if(sel&&!nofeed(sel)) m[sel]=1;
+  UNIVERSE["INDEX"].slice(0,12).forEach(function(o){ if(!o.nf) m[o.y]=1; });
   return Object.keys(m);
 }
 function setLed(k,txt){ var d=$("led"); d.className="dot "+k; $("led-txt").textContent=txt; }
@@ -580,7 +638,7 @@ function refresh(){
     lastOk=Date.now(); setLed("ok", mode==="backend"?"BACKEND LIVE":"YAHOO LIVE"); hideBanner();
   }).catch(function(err){
     mode="demo"; setLed(cfg.src==="demo"?"warn":"err", cfg.src==="demo"?"SIMULATION":"FLUX INDISPONIBLE - SIMULATION");
-    var o={}; list.forEach(function(y){ o[y]=demoQuote(y); }); applyQuotes(o);
+    var o={}; list.forEach(function(y){ if(!nofeed(y)) o[y]=demoQuote(y); }); applyQuotes(o);
     if(cfg.src!=="demo") showBanner(
       "Flux externe injoignable depuis cette page ("+ (err&&err.message||"erreur") +"). Un artifact publie est sandboxe : "+
       "les appels reseau sortants sont bloques. Ouvrez le fichier ARTEMIS_IA_TERMINAL.html en local, ou servez-le depuis votre backend Render, "+
@@ -601,6 +659,7 @@ function applyQuotes(out){
 /* --- historique long (3 ans) pour les fenetres de performance --- */
 var pending={};
 function ensureHist(y){
+  if(nofeed(y)) return Promise.resolve(null);
   if(HIST[y]&&Date.now()-HIST[y].at<900000) return Promise.resolve(HIST[y]);
   if(pending[y]) return pending[y];
   var get = (mode==="backend"&&cfg.base)? histBackend(y,"5y")
@@ -631,7 +690,7 @@ function perfs(y){
   return o;
 }
 function warmHist(){
-  var l=currentList().map(function(o){return o.y;});
+  var l=currentList().filter(function(o){return !o.nf;}).map(function(o){return o.y;});
   var i=0;
   (function nxt(){
     if(i>=l.length) { renderAll(); return; }
@@ -741,9 +800,14 @@ function renderTable(){
   var tb=$("tbody"); var list=rows();
   if(!list.length){ tb.innerHTML='<tr><td colspan="12"><div class="empty">Aucun sous-jacent ne correspond au filtre.</div></td></tr>'; return; }
   var html=list.map(function(r){
-    var y=r.o.y, q=r.q;
+    var y=r.o.y, q=r.q, nf=r.o.nf;
     var flash = (q.prev!=null&&q.p!=null&&q.p!==q.prev)?(q.p>q.prev?" fu":" fd"):"";
-    function c(v){ return '<td class="'+cls(v)+' tnum">'+pct(v)+"</td>"; }
+    function c(v){ return nf? '<td class="flat">\u2013</td>' : '<td class="'+cls(v)+' tnum">'+pct(v)+"</td>"; }
+    if(nf) return '<tr data-y="'+esc(y)+'" class="nf" aria-selected="'+(sel===y?"true":"false")+'">'+
+      '<td>'+esc(r.o.n)+'<span class="tkr">non cote</span></td>'+
+      '<td class="flat"><span class="pill">N/D</span></td><td class="c-opt flat">\u2013</td>'+
+      c()+c()+c()+c()+c()+c()+
+      '<td class="spk-td flat">\u2013</td><td class="c-opt flat">\u2013</td><td class="c-opt flat">\u2013</td></tr>';
     return '<tr data-y="'+esc(y)+'" aria-selected="'+(sel===y?"true":"false")+'">'+
       '<td>'+esc(r.o.n)+'<span class="tkr">'+esc(y)+"</span></td>"+
       '<td class="px tnum'+flash+'">'+fmt(q.p)+"</td>"+
@@ -765,9 +829,9 @@ function renderHeat(){
   var el=$("heat"), w=cfg.hmw;
   var list=rows().slice().sort(function(a,b){ var x=a[w],y=b[w]; if(x==null)return 1; if(y==null)return -1; return y-x; });
   el.innerHTML=list.map(function(r){
-    var v=r[w];
-    return '<button type="button" class="hmc" data-y="'+esc(r.o.y)+'" style="background:'+hmColor(v)+'">'+
-      "<b>"+esc(r.o.n)+"</b><i>"+pct(v)+"</i><u>"+fmt(r.q.p)+"</u></button>";
+    var v=r[w], nf=r.o.nf;
+    return '<button type="button" class="hmc" data-y="'+esc(r.o.y)+'" style="background:'+(nf?"#15191b":hmColor(v))+'">'+
+      "<b>"+esc(r.o.n)+"</b><i>"+(nf?"N/D":pct(v))+"</i><u>"+(nf?"non cote":fmt(r.q.p))+"</u></button>";
   }).join("")||'<div class="empty">Aucun sous-jacent.</div>';
 }
 function renderPerfView(){
@@ -788,12 +852,12 @@ function renderCharts(){
   var el=$("charts"), w=cfg.hmw;
   var list=rows().slice().sort(function(a,b){ var x=a[w],y=b[w]; if(x==null)return 1; if(y==null)return -1; return y-x; });
   el.innerHTML=list.map(function(r){
-    var y=r.o.y, v=r[w], C=series(y,w);
-    return '<button type="button" class="chc" data-y="'+esc(y)+'" aria-selected="'+(sel===y?"true":"false")+'">'+
+    var y=r.o.y, v=r[w], nf=r.o.nf, C=nf?null:series(y,w);
+    return '<button type="button" class="chc'+(nf?" nf":"")+'" data-y="'+esc(y)+'" aria-selected="'+(sel===y?"true":"false")+'">'+
       '<span class="hd"><span class="nm">'+esc(r.o.n)+'</span>'+
-      '<span class="pc '+cls(v)+'">'+pct(v)+"</span></span>"+
-      spark(C,232,62,1.6,v)+
-      '<span class="ft"><span>'+esc(y)+'</span><span class="tnum">'+fmt(r.q.p)+"</span></span></button>";
+      '<span class="pc '+(nf?"flat":cls(v))+'">'+(nf?"N/D":pct(v))+"</span></span>"+
+      (nf?'<span class="nfbox">pas de cotation publique</span>':spark(C,232,62,1.6,v))+
+      '<span class="ft"><span>'+(nf?"non cote":esc(y))+'</span><span class="tnum">'+(nf?"\u2013":fmt(r.q.p))+"</span></span></button>";
   }).join("")||'<div class="empty">Aucun sous-jacent.</div>';
 }
 function renderAll(){
@@ -823,7 +887,7 @@ function renderDetail(){
   if(!sel){ return; }
   var o=SYMS[sel], q=Q[sel]||{}, P=perfs(sel);
   $("d-name").textContent=o?o.n:sel;
-  $("d-sub").textContent=sel+"  ·  "+(q.cur||(o&&o.c)||"")+"  ·  "+(cfg.tab);
+    $("d-sub").textContent=(o&&o.nf?"Pas de cotation publique":sel)+"  \u00b7  "+(q.cur||(o&&o.c)||"")+"  \u00b7  "+(cfg.tab);
   $("d-px").textContent=fmt(q.p);
   var dl=$("d-delta"); dl.className="delta tnum "+cls(q.pct);
   dl.textContent=dchg(q)+"   "+pct(q.pct);
@@ -1015,7 +1079,7 @@ $("src").value=cfg.src; $("hmw").value=cfg.hmw; $("q").value=cfg.q||"";
 document.querySelectorAll(".fk[data-view]").forEach(function(x){ x.setAttribute("aria-pressed", x.getAttribute("data-view")===cfg.view?"true":"false"); });
 document.querySelectorAll("#ranges .rb").forEach(function(x){ x.setAttribute("aria-pressed", x.getAttribute("data-r")===cfg.range?"true":"false"); });
 buildTabs(); buildHead(); setLed("warn","CONNEXION");
-currentList().forEach(function(o){ HIST[o.y]=HIST[o.y]||demoHist(o.y); Q[o.y]=Q[o.y]||demoQuote(o.y); });
+currentList().forEach(function(o){ if(o.nf) return; HIST[o.y]=HIST[o.y]||demoHist(o.y); Q[o.y]=Q[o.y]||demoQuote(o.y); });
 applyQuotes({});
 renderAll();
 select(currentList()[0].y);

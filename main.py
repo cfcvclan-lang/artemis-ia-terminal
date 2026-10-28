@@ -1,39 +1,49 @@
 """
-ARTEMIS IA TERMINAL - backend de donnees
-----------------------------------
+ARTEMIS IA TERMINAL - backend de donnees (v2)
+---------------------------------------------
 Sert le terminal et son flux de marche depuis la meme origine, ce qui supprime
 tout probleme de CORS et autorise un rafraichissement a 15 secondes.
+
+v2 : appels Yahoo en direct (sans passer par le bootstrap cookie de yfinance,
+qui echoue depuis les IP de datacenter), repli sur Stooq, puis sur yfinance.
+L'endpoint /api/diag indique quelle source repond depuis l'hebergeur.
 
 Deploiement Render (Web Service, plan gratuit) :
     Build   : pip install -r requirements.txt
     Start   : uvicorn main:app --host 0.0.0.0 --port $PORT
-
-Poser ARTEMIS_IA_TERMINAL.html a cote de main.py : il est servi sur "/".
-Dans le terminal, choisir SOURCE = BACKEND ARTX (l'URL se deduit de l'origine).
 """
 from __future__ import annotations
 
+import csv
+import io
 import os
 import time
 import threading
 from typing import Any, Dict, List, Optional
 
+import requests
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-import yfinance as yf
-
-app = FastAPI(title="Artemis IA Terminal API", version="1.0")
+app = FastAPI(title="Artemis IA Terminal API", version="2.0")
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],          # restreindre a votre domaine en production
-    allow_methods=["GET"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "ARTEMIS_IA_TERMINAL.html")
+
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
+S = requests.Session()
+S.headers.update({
+    "User-Agent": UA,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8",
+})
+
+YH_HOSTS = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
 
 # ----------------------------------------------------------------- cache
 _lock = threading.Lock()
@@ -42,166 +52,273 @@ _cache: Dict[str, Any] = {}
 def cache_get(key: str, ttl: float):
     with _lock:
         hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
-        return hit[1]
-    return None
+    return hit[1] if hit and time.time() - hit[0] < ttl else None
 
 def cache_put(key: str, value):
     with _lock:
         _cache[key] = (time.time(), value)
 
-# ----------------------------------------------------------------- quotes
-QUOTE_TTL = 10.0          # le front interroge toutes les 15 s
+# ----------------------------------------------------------------- Yahoo direct
+def yh(path: str, params: dict, timeout: float = 12.0):
+    last = "aucune tentative"
+    for host in YH_HOSTS:
+        try:
+            r = S.get(host + path, params=params, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+            last = f"{host.split('//')[1][:7]} HTTP {r.status_code}"
+        except Exception as exc:
+            last = f"{host.split('//')[1][:7]} {type(exc).__name__}"
+    raise RuntimeError(last)
 
-def _fast_quote(sym: str) -> Optional[dict]:
-    try:
-        t = yf.Ticker(sym)
-        fi = t.fast_info
-        last = fi.get("last_price") if hasattr(fi, "get") else getattr(fi, "last_price", None)
-        prev = fi.get("previous_close") if hasattr(fi, "get") else getattr(fi, "previous_close", None)
-        if last is None:
-            return None
-        return {
-            "p": float(last),
-            "pc": float(prev) if prev else None,
-            "vol": _num(fi, "last_volume"),
-            "hi": _num(fi, "day_high"),
-            "lo": _num(fi, "day_low"),
-            "op": _num(fi, "open"),
-            "cur": _str(fi, "currency"),
-            "t": int(time.time() * 1000),
-        }
-    except Exception:
-        return None
+def yh_spark(syms: List[str]) -> Dict[str, dict]:
+    j = yh("/v8/finance/spark",
+           {"symbols": ",".join(syms), "range": "1d", "interval": "5m"})
+    rows = j.get("spark", {}).get("result", j) if isinstance(j, dict) else j
+    out: Dict[str, dict] = {}
+    seq = rows if isinstance(rows, list) else list(rows.values()) if isinstance(rows, dict) else []
+    for r in seq:
+        try:
+            resp = (r.get("response") or [{}])[0]
+            meta = resp.get("meta") or {}
+            sym = r.get("symbol") or meta.get("symbol")
+            last = meta.get("regularMarketPrice")
+            if sym is None or last is None:
+                continue
+            out[sym] = {
+                "p": float(last),
+                "pc": _f(meta.get("chartPreviousClose") or meta.get("previousClose")),
+                "vol": _f(meta.get("regularMarketVolume")),
+                "hi": _f(meta.get("regularMarketDayHigh")),
+                "lo": _f(meta.get("regularMarketDayLow")),
+                "op": None,
+                "cur": meta.get("currency"),
+                "t": int(time.time() * 1000),
+                "src": "yahoo",
+            }
+        except Exception:
+            continue
+    return out
 
-def _num(fi, key):
+def yh_chart(sym: str, rng: str, interval: str) -> dict:
+    j = yh(f"/v8/finance/chart/{sym}", {"range": rng, "interval": interval})
+    res = (j.get("chart") or {}).get("result") or []
+    if not res:
+        raise RuntimeError("chart vide")
+    r = res[0]
+    closes = (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    stamps = r.get("timestamp") or []
+    T, C = [], []
+    for i, ts in enumerate(stamps):
+        c = closes[i] if i < len(closes) else None
+        if c is not None:
+            T.append(int(ts) * 1000)
+            C.append(float(c))
+    return {"t": T, "c": C, "at": int(time.time() * 1000), "src": "yahoo"}
+
+def _f(v):
     try:
-        v = fi.get(key) if hasattr(fi, "get") else getattr(fi, key, None)
         return float(v) if v is not None else None
     except Exception:
         return None
 
-def _str(fi, key):
-    try:
-        v = fi.get(key) if hasattr(fi, "get") else getattr(fi, key, None)
-        return str(v) if v else None
-    except Exception:
+# ----------------------------------------------------------------- Stooq (repli)
+STOOQ_SUFFIX = {".PA": ".fr", ".DE": ".de", ".L": ".uk", ".AS": ".nl",
+                ".MI": ".it", ".MC": ".es", ".SW": ".ch", ".CO": ".dk",
+                ".OL": ".no", ".ST": ".se", ".VI": ".at", ".BR": ".be"}
+STOOQ_INDEX = {"^GSPC": "^spx", "^NDX": "^ndx", "^DJI": "^dji", "^GDAXI": "^dax",
+               "^FCHI": "^cac", "^FTSE": "^ukx", "^IBEX": "^ibex", "^SSMI": "^smi",
+               "^N225": "^nkx", "^STOXX50E": "^sx5e"}
+
+def stooq_symbol(sym: str) -> Optional[str]:
+    if sym in STOOQ_INDEX:
+        return STOOQ_INDEX[sym]
+    if sym.endswith("=X"):
+        return sym[:-2].lower()
+    if sym.endswith("=F") or sym.startswith("^"):
         return None
+    for suf, repl in STOOQ_SUFFIX.items():
+        if sym.endswith(suf):
+            return sym[: -len(suf)].lower().replace("-", "") + repl
+    if "." not in sym:
+        return sym.lower() + ".us"
+    return None
+
+def stooq_quotes(syms: List[str]) -> Dict[str, dict]:
+    pairs = [(s, stooq_symbol(s)) for s in syms]
+    pairs = [(a, b) for a, b in pairs if b]
+    if not pairs:
+        return {}
+    out: Dict[str, dict] = {}
+    for i in range(0, len(pairs), 20):
+        grp = pairs[i:i + 20]
+        try:
+            r = S.get("https://stooq.com/q/l/",
+                      params={"s": ",".join(b for _, b in grp),
+                              "f": "sd2t2ohlcv", "h": "", "e": "csv"}, timeout=12)
+            if r.status_code != 200:
+                continue
+            back = {b: a for a, b in grp}
+            for row in csv.DictReader(io.StringIO(r.text)):
+                sym = back.get((row.get("Symbol") or "").lower())
+                close = _f(row.get("Close"))
+                if not sym or close is None:
+                    continue
+                op = _f(row.get("Open"))
+                out[sym] = {"p": close, "pc": op, "vol": _f(row.get("Volume")),
+                            "hi": _f(row.get("High")), "lo": _f(row.get("Low")),
+                            "op": op, "cur": None,
+                            "t": int(time.time() * 1000), "src": "stooq"}
+        except Exception:
+            continue
+    return out
+
+def stooq_history(sym: str) -> dict:
+    s = stooq_symbol(sym)
+    if not s:
+        raise RuntimeError("symbole non mappe")
+    r = S.get("https://stooq.com/q/d/l/", params={"s": s, "i": "d"}, timeout=15)
+    if r.status_code != 200 or not r.text.startswith("Date"):
+        raise RuntimeError(f"stooq HTTP {r.status_code}")
+    T, C = [], []
+    for row in csv.DictReader(io.StringIO(r.text)):
+        c = _f(row.get("Close"))
+        if c is None:
+            continue
+        try:
+            ts = time.mktime(time.strptime(row["Date"], "%Y-%m-%d")) * 1000
+        except Exception:
+            continue
+        T.append(int(ts))
+        C.append(c)
+    if not C:
+        raise RuntimeError("stooq vide")
+    return {"t": T[-1300:], "c": C[-1300:], "at": int(time.time() * 1000), "src": "stooq"}
+
+# ----------------------------------------------------------------- routes
+QUOTE_TTL = 10.0
+HIST_TTL = 900.0
+CONS_TTL = 21600.0
+
+def chunks(a, n):
+    return [a[i:i + n] for i in range(0, len(a), n)]
 
 @app.get("/api/quotes")
 def quotes(symbols: str = Query(..., description="liste separee par des virgules")):
-    syms: List[str] = [s.strip() for s in symbols.split(",") if s.strip()][:400]
+    syms = [s.strip() for s in symbols.split(",") if s.strip()][:400]
     out: Dict[str, dict] = {}
     todo: List[str] = []
     for s in syms:
         hit = cache_get("q:" + s, QUOTE_TTL)
-        if hit:
-            out[s] = hit
-        else:
-            todo.append(s)
+        (out.__setitem__(s, hit) if hit else todo.append(s))
+    if not todo:
+        return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
-    if todo:
-        # un seul appel groupe pour la volumetrie, puis complement unitaire
+    for grp in chunks(todo, 50):
         try:
-            data = yf.download(
-                tickers=" ".join(todo), period="2d", interval="1d",
-                group_by="ticker", threads=True, progress=False, auto_adjust=False,
-            )
-            for s in todo:
-                try:
-                    df = data[s] if len(todo) > 1 else data
-                    df = df.dropna()
-                    if len(df) >= 1:
-                        last = float(df["Close"].iloc[-1])
-                        prev = float(df["Close"].iloc[-2]) if len(df) >= 2 else None
-                        rec = {
-                            "p": last, "pc": prev,
-                            "vol": float(df["Volume"].iloc[-1]) if "Volume" in df else None,
-                            "hi": float(df["High"].iloc[-1]), "lo": float(df["Low"].iloc[-1]),
-                            "op": float(df["Open"].iloc[-1]), "cur": None,
-                            "t": int(time.time() * 1000),
-                        }
-                        out[s] = rec
-                        cache_put("q:" + s, rec)
-                except Exception:
-                    continue
+            out.update(yh_spark(grp))
         except Exception:
             pass
 
-        for s in todo:
-            if s in out:
-                continue
-            rec = _fast_quote(s)
-            if rec:
-                out[s] = rec
-                cache_put("q:" + s, rec)
+    missing = [s for s in todo if s not in out]
+    if missing:
+        try:
+            out.update(stooq_quotes(missing))
+        except Exception:
+            pass
 
+    for s in todo:
+        if s in out:
+            cache_put("q:" + s, out[s])
     return JSONResponse(out, headers={"Cache-Control": "no-store"})
 
-# ----------------------------------------------------------------- history
-HIST_TTL = 900.0
-RANGE_MAP = {
-    "1d": ("1d", "5m"), "5d": ("5d", "30m"), "1mo": ("1mo", "1d"),
-    "6mo": ("6mo", "1d"), "ytd": ("ytd", "1d"), "1y": ("1y", "1d"),
-    "3y": ("3y", "1d"), "5y": ("5y", "1d"),
-}
+RANGE_MAP = {"1d": ("1d", "5m"), "5d": ("5d", "30m"), "1mo": ("1mo", "1d"),
+             "6mo": ("6mo", "1d"), "ytd": ("ytd", "1d"), "1y": ("1y", "1d"),
+             "3y": ("3y", "1d"), "5y": ("5y", "1d")}
 
 @app.get("/api/history")
 def history(symbol: str, range: str = "5y"):
-    period, interval = RANGE_MAP.get(range, ("5y", "1d"))
     key = f"h:{symbol}:{range}"
     hit = cache_get(key, HIST_TTL)
     if hit:
         return JSONResponse(hit, headers={"Cache-Control": "no-store"})
+    rng, interval = RANGE_MAP.get(range, ("5y", "1d"))
+    payload = None
     try:
-        df = yf.Ticker(symbol).history(period=period, interval=interval, auto_adjust=False)
-        df = df.dropna(subset=["Close"])
-        payload = {
-            "t": [int(ts.timestamp() * 1000) for ts in df.index],
-            "c": [float(v) for v in df["Close"]],
-            "at": int(time.time() * 1000),
-        }
+        payload = yh_chart(symbol, rng, interval)
+        if not payload["c"]:
+            payload = None
     except Exception:
-        payload = {"t": [], "c": [], "at": int(time.time() * 1000)}
+        payload = None
+    if payload is None and interval == "1d":
+        try:
+            payload = stooq_history(symbol)
+        except Exception:
+            payload = None
+    if payload is None:
+        payload = {"t": [], "c": [], "at": int(time.time() * 1000), "src": "none"}
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
-
-# ----------------------------------------------------------------- consensus
-CONS_TTL = 21600.0
 
 @app.get("/api/consensus")
 def consensus(symbol: str):
     key = "c:" + symbol
     hit = cache_get(key, CONS_TTL)
-    if hit:
+    if hit is not None:
         return JSONResponse(hit, headers={"Cache-Control": "no-store"})
     payload: Dict[str, Any] = {}
     try:
-        t = yf.Ticker(symbol)
-        info = t.get_info()
-        payload = {
-            "mean": info.get("recommendationMean"),
-            "key": info.get("recommendationKey"),
-            "target": info.get("targetMeanPrice"),
-            "low": info.get("targetLowPrice"),
-            "high": info.get("targetHighPrice"),
-            "n": info.get("numberOfAnalystOpinions"),
-        }
-        try:
-            tr = t.recommendations
-            if tr is not None and len(tr):
-                row = tr.iloc[0]
-                payload["buy"] = int(row.get("strongBuy", 0)) + int(row.get("buy", 0))
-                payload["hold"] = int(row.get("hold", 0))
-                payload["sell"] = int(row.get("sell", 0)) + int(row.get("strongSell", 0))
-        except Exception:
-            pass
+        j = yh(f"/v10/finance/quoteSummary/{symbol}",
+               {"modules": "financialData,recommendationTrend"})
+        res = (j.get("quoteSummary") or {}).get("result") or []
+        if res:
+            f = res[0].get("financialData") or {}
+            tr = ((res[0].get("recommendationTrend") or {}).get("trend") or [{}])[0]
+            payload = {
+                "mean": (f.get("recommendationMean") or {}).get("raw"),
+                "key": f.get("recommendationKey"),
+                "target": (f.get("targetMeanPrice") or {}).get("raw"),
+                "low": (f.get("targetLowPrice") or {}).get("raw"),
+                "high": (f.get("targetHighPrice") or {}).get("raw"),
+                "n": (f.get("numberOfAnalystOpinions") or {}).get("raw"),
+                "buy": int(tr.get("strongBuy") or 0) + int(tr.get("buy") or 0),
+                "hold": int(tr.get("hold") or 0),
+                "sell": int(tr.get("sell") or 0) + int(tr.get("strongSell") or 0),
+            }
     except Exception:
-        pass
+        payload = {}
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
-# ----------------------------------------------------------------- page
+@app.get("/api/diag")
+def diag():
+    """Indique quelle source repond depuis cet hebergeur."""
+    report: Dict[str, Any] = {"host": os.environ.get("RENDER_EXTERNAL_URL", "local")}
+    try:
+        q = yh_spark(["AAPL", "MC.PA", "^FCHI"])
+        report["yahoo_spark"] = {"ok": bool(q), "n": len(q),
+                                 "sample": {k: v["p"] for k, v in list(q.items())[:3]}}
+    except Exception as exc:
+        report["yahoo_spark"] = {"ok": False, "err": str(exc)[:160]}
+    try:
+        h = yh_chart("AAPL", "1mo", "1d")
+        report["yahoo_chart"] = {"ok": bool(h["c"]), "points": len(h["c"])}
+    except Exception as exc:
+        report["yahoo_chart"] = {"ok": False, "err": str(exc)[:160]}
+    try:
+        q = stooq_quotes(["AAPL", "MC.PA"])
+        report["stooq"] = {"ok": bool(q), "n": len(q),
+                           "sample": {k: v["p"] for k, v in q.items()}}
+    except Exception as exc:
+        report["stooq"] = {"ok": False, "err": str(exc)[:160]}
+    try:
+        r = S.get("https://query1.finance.yahoo.com/v8/finance/chart/AAPL",
+                  params={"range": "1d", "interval": "5m"}, timeout=10)
+        report["yahoo_raw_status"] = r.status_code
+    except Exception as exc:
+        report["yahoo_raw_status"] = f"{type(exc).__name__}"
+    return JSONResponse(report, headers={"Cache-Control": "no-store"})
+
 @app.get("/")
 def index():
     if os.path.exists(PAGE):
