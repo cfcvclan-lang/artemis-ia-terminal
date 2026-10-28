@@ -30,13 +30,30 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="5.2")
+app = FastAPI(title="Artemis IA Terminal API", version="6.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "ARTEMIS_IA_TERMINAL.html")
+
+
+def page_path() -> str:
+    """Un navigateur suffixe les telechargements repetes et GitHub cree alors un
+    nouveau fichier au lieu de remplacer l'ancien. On retient donc la variante la
+    plus recente plutot qu'un nom fige."""
+    import glob as _glob
+    import re as _re
+    cands = _glob.glob(os.path.join(HERE, "ARTEMIS_IA_TERMINAL*.htm*"))
+    if not cands:
+        return PAGE
+
+    def rank(p):
+        m = _re.search(r"[_ -]\(?(\d+)\)?\.html?$", os.path.basename(p))
+        return (int(m.group(1)) if m else 0, os.path.getmtime(p))
+
+    return max(cands, key=rank)
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
@@ -48,6 +65,28 @@ S.headers.update({
 })
 
 YH_HOSTS = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
+_crumb = {"v": None, "at": 0.0}
+
+
+def yh_crumb() -> Optional[str]:
+    """Jeton exige par l'endpoint analystes. Souvent refuse depuis un hebergeur."""
+    if _crumb["v"] and time.time() - _crumb["at"] < 3600:
+        return _crumb["v"]
+    for seed in ("https://finance.yahoo.com/quote/AAPL", "https://fc.yahoo.com"):
+        try:
+            S.get(seed, timeout=8)
+        except Exception:
+            continue
+    for host in YH_HOSTS:
+        try:
+            r = S.get(host + "/v1/test/getcrumb", timeout=8)
+            if r.status_code == 200 and r.text and len(r.text) < 40:
+                _crumb["v"] = r.text.strip()
+                _crumb["at"] = time.time()
+                return _crumb["v"]
+        except Exception:
+            continue
+    return None
 
 # ----------------------------------------------------------------- cache
 _lock = threading.Lock()
@@ -344,6 +383,43 @@ def history(symbol: str, range: str = "5y"):
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
+def yh_dividends(sym: str) -> Dict[str, Any]:
+    """Rendement du dividende reconstitue depuis les evenements du graphique."""
+    j = yh("/v8/finance/chart/" + sym,
+           {"range": "2y", "interval": "1d", "events": "div"}, timeout=10.0)
+    res = (j.get("chart") or {}).get("result") or []
+    if not res:
+        return {}
+    r = res[0]
+    meta = r.get("meta") or {}
+    price = _f(meta.get("regularMarketPrice"))
+    divs = ((r.get("events") or {}).get("dividends") or {})
+    rows = []
+    for ev in divs.values():
+        ts, amt = _f(ev.get("date")), _f(ev.get("amount"))
+        if ts and amt:
+            rows.append((ts, amt))
+    rows.sort()
+    cut = time.time() - 366 * 86400
+    ttm = sum(a for ts, a in rows if ts >= cut)
+    out: Dict[str, Any] = {
+        "divTtm": ttm or None,
+        "divYield": (ttm / price * 100) if (ttm and price) else None,
+        "divLast": rows[-1][1] if rows else None,
+        "divLastDate": int(rows[-1][0] * 1000) if rows else None,
+        "divCount": len([1 for ts, _ in rows if ts >= cut]),
+    }
+    closes = (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    stamps = r.get("timestamp") or []
+    yr = time.time() - 366 * 86400
+    win = [c for i, c in enumerate(closes) if c is not None and i < len(stamps) and stamps[i] >= yr]
+    if win:
+        out["hi52"] = max(win)
+        out["lo52"] = min(win)
+    out["price"] = price
+    return out
+
+
 @app.get("/api/consensus")
 def consensus(symbol: str):
     key = "c:" + symbol
@@ -352,13 +428,20 @@ def consensus(symbol: str):
         return JSONResponse(hit, headers={"Cache-Control": "no-store"})
     payload: Dict[str, Any] = {}
     try:
-        j = yh(f"/v10/finance/quoteSummary/{symbol}",
-               {"modules": "financialData,recommendationTrend"})
+        payload.update(yh_dividends(symbol))
+    except Exception:
+        pass
+    try:
+        params = {"modules": "financialData,recommendationTrend,summaryDetail"}
+        cr = yh_crumb()
+        if cr:
+            params["crumb"] = cr
+        j = yh(f"/v10/finance/quoteSummary/{symbol}", params)
         res = (j.get("quoteSummary") or {}).get("result") or []
         if res:
             f = res[0].get("financialData") or {}
             tr = ((res[0].get("recommendationTrend") or {}).get("trend") or [{}])[0]
-            payload = {
+            payload.update({
                 "mean": (f.get("recommendationMean") or {}).get("raw"),
                 "key": f.get("recommendationKey"),
                 "target": (f.get("targetMeanPrice") or {}).get("raw"),
@@ -368,9 +451,9 @@ def consensus(symbol: str):
                 "buy": int(tr.get("strongBuy") or 0) + int(tr.get("buy") or 0),
                 "hold": int(tr.get("hold") or 0),
                 "sell": int(tr.get("sell") or 0) + int(tr.get("strongSell") or 0),
-            }
+            })
     except Exception:
-        payload = {}
+        pass
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
@@ -413,6 +496,18 @@ def diag():
         report["yahoo_raw_status"] = r.status_code
     except Exception as exc:
         report["yahoo_raw_status"] = f"{type(exc).__name__}"
+    try:
+        report["page"] = os.path.basename(page_path())
+    except Exception as exc:
+        report["page"] = str(exc)[:60]
+    try:
+        report["crumb"] = bool(yh_crumb())
+    except Exception as exc:
+        report["crumb"] = str(exc)[:80]
+    try:
+        report["dividendes"] = yh_dividends("MC.PA")
+    except Exception as exc:
+        report["dividendes"] = str(exc)[:120]
     return JSONResponse(report, headers={"Cache-Control": "no-store"})
 
 
@@ -491,7 +586,7 @@ PWA_TAIL = (
 
 def page_html() -> str:
     """Sert la page en corrigeant au vol ce qui doit l'etre, sans dependre du fichier depose."""
-    with open(PAGE, "r", encoding="utf-8") as fh:
+    with open(page_path(), "r", encoding="utf-8") as fh:
         html = fh.read()
     html = html.replace(",12000)", ",60000)")
     html = html.replace(",25000)", ",60000)")
@@ -520,7 +615,7 @@ def service_worker():
 
 @app.get("/")
 def index():
-    if os.path.exists(PAGE):
+    if os.path.exists(page_path()):
         return HTMLResponse(page_html())
     return JSONResponse({"ok": True, "msg": "Poser ARTEMIS_IA_TERMINAL.html a cote de main.py."})
 
