@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="6.0")
+app = FastAPI(title="Artemis IA Terminal API", version="7.1")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -202,15 +202,19 @@ def yh_chart(sym: str, rng: str, interval: str) -> dict:
     if not res:
         raise RuntimeError("chart vide")
     r = res[0]
-    closes = (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
+    q0 = (r.get("indicators", {}).get("quote") or [{}])[0]
+    closes = q0.get("close") or []
+    vols = q0.get("volume") or []
     stamps = r.get("timestamp") or []
-    T, C = [], []
+    T, C, V = [], [], []
     for i, ts in enumerate(stamps):
         c = closes[i] if i < len(closes) else None
-        if c is not None:
-            T.append(int(ts) * 1000)
-            C.append(float(c))
-    return {"t": T, "c": C, "at": int(time.time() * 1000), "src": "yahoo"}
+        if c is None:
+            continue
+        T.append(int(ts) * 1000)
+        C.append(float(c))
+        V.append(float(vols[i]) if i < len(vols) and vols[i] is not None else None)
+    return {"t": T, "c": C, "v": V, "at": int(time.time() * 1000), "src": "yahoo"}
 
 def _f(v):
     try:
@@ -457,6 +461,135 @@ def consensus(symbol: str):
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
+
+# ----------------------------------------------------------------- taux
+ECB = "https://data-api.ecb.europa.eu/service/data/"
+RATES_TTL = 7200.0
+
+ECB_SERIES = [
+    ("ESTR",       "STR a un jour",        "EST", "B.EU000A2X2A25.WT",                 "court"),
+    ("EURIBOR1M",  "Euribor 1 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",   "court"),
+    ("EURIBOR3M",  "Euribor 3 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",   "court"),
+    ("EURIBOR6M",  "Euribor 6 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",   "court"),
+    ("EURIBOR12M", "Euribor 12 mois",      "FM",  "D.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",   "court"),
+    ("EUR_AAA_1Y", "Courbe AAA 1 an",      "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y",   "courbe"),
+    ("EUR_AAA_2Y", "Courbe AAA 2 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y",   "courbe"),
+    ("EUR_AAA_5Y", "Courbe AAA 5 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y",   "courbe"),
+    ("EUR_AAA_10Y","Courbe AAA 10 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y",  "courbe"),
+    ("EUR_AAA_30Y","Courbe AAA 30 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y",  "courbe"),
+    ("EUR_ALL_10Y","Toutes notations 10 ans","YC","B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y",  "courbe"),
+    ("FR_10Y",     "France 10 ans",        "IRS", "M.FR.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("DE_10Y",     "Allemagne 10 ans",     "IRS", "M.DE.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("IT_10Y",     "Italie 10 ans",        "IRS", "M.IT.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("ES_10Y",     "Espagne 10 ans",       "IRS", "M.ES.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+]
+
+US_SERIES = [("US_3M", "Etats-Unis 3 mois", "^IRX", 0.25),
+             ("US_5Y", "Etats-Unis 5 ans", "^FVX", 5.0),
+             ("US_10Y", "Etats-Unis 10 ans", "^TNX", 10.0),
+             ("US_30Y", "Etats-Unis 30 ans", "^TYX", 30.0)]
+
+ECHEANCE = {"EUR_AAA_1Y": 1.0, "EUR_AAA_2Y": 2.0, "EUR_AAA_5Y": 5.0,
+            "EUR_AAA_10Y": 10.0, "EUR_AAA_30Y": 30.0,
+            "ESTR": 0.003, "EURIBOR1M": 0.08, "EURIBOR3M": 0.25,
+            "EURIBOR6M": 0.5, "EURIBOR12M": 1.0}
+
+
+def ecb_series(flow: str, key: str, n: int = 420):
+    """Observations BCE, de la plus ancienne a la plus recente."""
+    r = S.get(ECB + flow + "/" + key,
+              params={"format": "csvdata", "detail": "dataonly", "lastNObservations": n},
+              timeout=20)
+    if r.status_code != 200 or not r.text:
+        raise RuntimeError("BCE HTTP " + str(r.status_code))
+    out = []
+    for row in csv.DictReader(io.StringIO(r.text)):
+        d, v = row.get("TIME_PERIOD"), _f(row.get("OBS_VALUE"))
+        if d and v is not None:
+            out.append((d, v))
+    out.sort()
+    if not out:
+        raise RuntimeError("serie vide")
+    return out
+
+
+def _delta(obs, jours):
+    """Variation en points de base sur la fenetre demandee."""
+    if len(obs) < 2:
+        return None
+    import datetime as _dt
+    try:
+        fin = _dt.date.fromisoformat(obs[-1][0][:10])
+    except Exception:
+        return None
+    cible = _dt.date(fin.year, 1, 1) if jours == "ytd" else fin - _dt.timedelta(days=jours)
+    ref = None
+    for d, v in obs:
+        try:
+            dd = _dt.date.fromisoformat(d[:10])
+        except Exception:
+            continue
+        if dd <= cible:
+            ref = v
+    if ref is None:
+        ref = obs[0][1]
+    return (obs[-1][1] - ref) * 100.0
+
+
+def _une_serie_ecb(spec):
+    code, lib, flow, key, fam = spec
+    try:
+        obs = ecb_series(flow, key)
+        return code, {"label": lib, "famille": fam, "src": "BCE",
+                      "v": obs[-1][1], "date": obs[-1][0],
+                      "d": _delta(obs, 1), "w": _delta(obs, 7),
+                      "m": _delta(obs, 30), "ytd": _delta(obs, "ytd"),
+                      "annees": ECHEANCE.get(code)}
+    except Exception as exc:
+        return code, {"label": lib, "famille": fam, "src": "BCE",
+                      "err": str(exc)[:90], "annees": ECHEANCE.get(code)}
+
+
+def _une_serie_us(spec):
+    code, lib, sym, ans = spec
+    try:
+        h = yh_chart(sym, "1y", "1d")
+        c, t = h["c"], h["t"]
+        if not c:
+            raise RuntimeError("vide")
+        import datetime as _dt
+        obs = [(_dt.datetime.utcfromtimestamp(t[i] / 1000).date().isoformat(), c[i])
+               for i in range(len(c))]
+        return code, {"label": lib, "famille": "souverain", "src": "Yahoo",
+                      "v": c[-1], "date": obs[-1][0],
+                      "d": _delta(obs, 1), "w": _delta(obs, 7),
+                      "m": _delta(obs, 30), "ytd": _delta(obs, "ytd"),
+                      "annees": ans}
+    except Exception as exc:
+        return code, {"label": lib, "famille": "souverain", "src": "Yahoo",
+                      "err": str(exc)[:90], "annees": ans}
+
+
+@app.get("/api/rates")
+def rates():
+    hit = cache_get("rates", RATES_TTL)
+    if hit:
+        return JSONResponse(hit, headers={"Cache-Control": "no-store"})
+    series: Dict[str, Any] = {}
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            for code, rec in pool.map(_une_serie_ecb, ECB_SERIES):
+                series[code] = rec
+            for code, rec in pool.map(_une_serie_us, US_SERIES):
+                series[code] = rec
+    except Exception:
+        pass
+    payload = {"asof": int(time.time() * 1000), "series": series}
+    if series:
+        cache_put("rates", payload)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/diag")
 def diag():
     """Indique quelle source repond depuis cet hebergeur."""
@@ -508,6 +641,11 @@ def diag():
         report["dividendes"] = yh_dividends("MC.PA")
     except Exception as exc:
         report["dividendes"] = str(exc)[:120]
+    try:
+        _c, _r = _une_serie_ecb(ECB_SERIES[2])
+        report["bce"] = _r
+    except Exception as exc:
+        report["bce"] = str(exc)[:120]
     return JSONResponse(report, headers={"Cache-Control": "no-store"})
 
 
