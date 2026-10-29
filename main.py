@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="7.1")
+app = FastAPI(title="Artemis IA Terminal API", version="7.2")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -468,10 +468,12 @@ RATES_TTL = 7200.0
 
 ECB_SERIES = [
     ("ESTR",       "STR a un jour",        "EST", "B.EU000A2X2A25.WT",                 "court"),
-    ("EURIBOR1M",  "Euribor 1 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",   "court"),
-    ("EURIBOR3M",  "Euribor 3 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",   "court"),
-    ("EURIBOR6M",  "Euribor 6 mois",       "FM",  "D.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",   "court"),
-    ("EURIBOR12M", "Euribor 12 mois",      "FM",  "D.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",   "court"),
+    ("MRO",        "BCE refi principal",   "FM",  "D.U2.EUR.4F.KR.MRR_FR.LEV",         "court"),
+    ("DFR",        "BCE facilite de depot","FM",  "D.U2.EUR.4F.KR.DFR.LEV",            "court"),
+    ("EURIBOR1M",  "Euribor 1 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",   "court"),
+    ("EURIBOR3M",  "Euribor 3 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",   "court"),
+    ("EURIBOR6M",  "Euribor 6 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",   "court"),
+    ("EURIBOR12M", "Euribor 12 mois",      "FM",  "M.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",   "court"),
     ("EUR_AAA_1Y", "Courbe AAA 1 an",      "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y",   "courbe"),
     ("EUR_AAA_2Y", "Courbe AAA 2 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y",   "courbe"),
     ("EUR_AAA_5Y", "Courbe AAA 5 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y",   "courbe"),
@@ -491,7 +493,7 @@ US_SERIES = [("US_3M", "Etats-Unis 3 mois", "^IRX", 0.25),
 
 ECHEANCE = {"EUR_AAA_1Y": 1.0, "EUR_AAA_2Y": 2.0, "EUR_AAA_5Y": 5.0,
             "EUR_AAA_10Y": 10.0, "EUR_AAA_30Y": 30.0,
-            "ESTR": 0.003, "EURIBOR1M": 0.08, "EURIBOR3M": 0.25,
+            "ESTR": 0.003, "MRO": 0.0, "DFR": 0.0, "EURIBOR1M": 0.08, "EURIBOR3M": 0.25,
             "EURIBOR6M": 0.5, "EURIBOR12M": 1.0}
 
 
