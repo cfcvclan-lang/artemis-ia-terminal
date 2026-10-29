@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 import os
 import time
 import threading
@@ -30,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="7.2")
+app = FastAPI(title="Artemis IA Terminal API", version="8.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
@@ -481,7 +482,7 @@ ECB_SERIES = [
     ("EUR_AAA_30Y","Courbe AAA 30 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y",  "courbe"),
     ("EUR_ALL_10Y","Toutes notations 10 ans","YC","B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y",  "courbe"),
     ("FR_10Y",     "France 10 ans",        "IRS", "M.FR.L.L40.CI.0000.EUR.N.Z",        "souverain"),
-    ("DE_10Y",     "Allemagne 10 ans",     "IRS", "M.DE.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("DE_10Y_M",   "Allemagne 10 ans",     "IRS", "M.DE.L.L40.CI.0000.EUR.N.Z",        "souverain"),
     ("IT_10Y",     "Italie 10 ans",        "IRS", "M.IT.L.L40.CI.0000.EUR.N.Z",        "souverain"),
     ("ES_10Y",     "Espagne 10 ans",       "IRS", "M.ES.L.L40.CI.0000.EUR.N.Z",        "souverain"),
 ]
@@ -495,6 +496,48 @@ ECHEANCE = {"EUR_AAA_1Y": 1.0, "EUR_AAA_2Y": 2.0, "EUR_AAA_5Y": 5.0,
             "EUR_AAA_10Y": 10.0, "EUR_AAA_30Y": 30.0,
             "ESTR": 0.003, "MRO": 0.0, "DFR": 0.0, "EURIBOR1M": 0.08, "EURIBOR3M": 0.25,
             "EURIBOR6M": 0.5, "EURIBOR12M": 1.0}
+
+
+BBK = "https://api.statistiken.bundesbank.de/rest/data/"
+BBK_SERIES = [
+    ("DE_1Y",  "Allemagne 1 an",   "D.I.ZST.ZI.EUR.S1311.B.A604.R01XX.R.A.A._Z._Z.A", 1.0),
+    ("DE_2Y",  "Allemagne 2 ans",  "D.I.ZST.ZI.EUR.S1311.B.A604.R02XX.R.A.A._Z._Z.A", 2.0),
+    ("DE_5Y",  "Allemagne 5 ans",  "D.I.ZST.ZI.EUR.S1311.B.A604.R05XX.R.A.A._Z._Z.A", 5.0),
+    ("DE_10Y", "Allemagne 10 ans", "D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A", 10.0),
+    ("DE_30Y", "Allemagne 30 ans", "D.I.ZST.ZI.EUR.S1311.B.A604.R30XX.R.A.A._Z._Z.A", 30.0),
+]
+
+
+def bbk_series(key: str, n: int = 420):
+    """Observations quotidiennes de la Bundesbank, de la plus ancienne a la plus recente."""
+    r = S.get(BBK + "BBSIS/" + key,
+              params={"format": "csv", "lang": "en", "lastNObservations": n}, timeout=20)
+    if r.status_code != 200 or not r.text:
+        raise RuntimeError("BBK HTTP " + str(r.status_code))
+    out = []
+    for line in r.text.splitlines():
+        parts = line.split(",")
+        if len(parts) >= 2 and len(parts[0]) == 10 and parts[0][4] == "-":
+            v = _f(parts[1])
+            if v is not None:
+                out.append((parts[0], v))
+    out.sort()
+    if not out:
+        raise RuntimeError("serie vide")
+    return out
+
+
+def _une_serie_bbk(spec):
+    code, lib, key, ans = spec
+    try:
+        obs = bbk_series(key)
+        return code, {"label": lib, "famille": "allemagne", "src": "Bundesbank",
+                      "freq": "quotidien", "v": obs[-1][1], "date": obs[-1][0],
+                      "d": _delta(obs, 1), "w": _delta(obs, 7),
+                      "m": _delta(obs, 30), "ytd": _delta(obs, "ytd"), "annees": ans}
+    except Exception as exc:
+        return code, {"label": lib, "famille": "allemagne", "src": "Bundesbank",
+                      "freq": "quotidien", "err": str(exc)[:90], "annees": ans}
 
 
 def ecb_series(flow: str, key: str, n: int = 420):
@@ -543,12 +586,14 @@ def _une_serie_ecb(spec):
     try:
         obs = ecb_series(flow, key)
         return code, {"label": lib, "famille": fam, "src": "BCE",
+                      "freq": ("mensuel" if key.startswith("M.") else "quotidien"),
                       "v": obs[-1][1], "date": obs[-1][0],
                       "d": _delta(obs, 1), "w": _delta(obs, 7),
                       "m": _delta(obs, 30), "ytd": _delta(obs, "ytd"),
                       "annees": ECHEANCE.get(code)}
     except Exception as exc:
         return code, {"label": lib, "famille": fam, "src": "BCE",
+                      "freq": ("mensuel" if key.startswith("M.") else "quotidien"),
                       "err": str(exc)[:90], "annees": ECHEANCE.get(code)}
 
 
@@ -562,14 +607,14 @@ def _une_serie_us(spec):
         import datetime as _dt
         obs = [(_dt.datetime.utcfromtimestamp(t[i] / 1000).date().isoformat(), c[i])
                for i in range(len(c))]
-        return code, {"label": lib, "famille": "souverain", "src": "Yahoo",
-                      "v": c[-1], "date": obs[-1][0],
+        return code, {"label": lib, "famille": "etatsunis", "src": "Yahoo",
+                      "freq": "intraday", "v": c[-1], "date": obs[-1][0],
                       "d": _delta(obs, 1), "w": _delta(obs, 7),
                       "m": _delta(obs, 30), "ytd": _delta(obs, "ytd"),
                       "annees": ans}
     except Exception as exc:
-        return code, {"label": lib, "famille": "souverain", "src": "Yahoo",
-                      "err": str(exc)[:90], "annees": ans}
+        return code, {"label": lib, "famille": "etatsunis", "src": "Yahoo",
+                      "freq": "intraday", "err": str(exc)[:90], "annees": ans}
 
 
 @app.get("/api/rates")
@@ -584,11 +629,103 @@ def rates():
                 series[code] = rec
             for code, rec in pool.map(_une_serie_us, US_SERIES):
                 series[code] = rec
+            for code, rec in pool.map(_une_serie_bbk, BBK_SERIES):
+                series[code] = rec
     except Exception:
         pass
     payload = {"asof": int(time.time() * 1000), "series": series}
     if series:
         cache_put("rates", payload)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
+# ----------------------------------------------------------------- actualites
+NEWS_TTL = 900.0
+FLUX_MACRO = [
+    ("Les Echos economie", "https://services.lesechos.fr/rss/les-echos-economie.xml"),
+    ("Les Echos monde", "https://services.lesechos.fr/rss/les-echos-monde.xml"),
+    ("Le Monde international", "https://www.lemonde.fr/international/rss_full.xml"),
+    ("Le Monde economie", "https://www.lemonde.fr/economie/rss_full.xml"),
+    ("France Info economie", "https://www.francetvinfo.fr/economie.rss"),
+]
+_RE_ITEM = re.compile(r"<item[ >].*?</item>", re.S | re.I)
+_RE_TITRE = re.compile(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", re.S | re.I)
+_RE_LIEN = re.compile(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", re.S | re.I)
+_RE_DATE = re.compile(r"<pubDate>(.*?)</pubDate>", re.S | re.I)
+
+
+def rss(nom, url, maxi=8):
+    out = []
+    try:
+        r = S.get(url, timeout=12)
+        if r.status_code != 200:
+            return out
+        for bloc in _RE_ITEM.findall(r.text)[:maxi]:
+            t = _RE_TITRE.search(bloc)
+            l = _RE_LIEN.search(bloc)
+            d = _RE_DATE.search(bloc)
+            if not t or not l:
+                continue
+            ts = None
+            if d:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    ts = int(parsedate_to_datetime(d.group(1).strip()).timestamp() * 1000)
+                except Exception:
+                    ts = None
+            out.append({"titre": t.group(1).strip(), "lien": l.group(1).strip(),
+                        "src": nom, "t": ts, "cat": "macro", "tags": []})
+    except Exception:
+        pass
+    return out
+
+
+def yh_news(terme, maxi=6):
+    out = []
+    try:
+        j = yh("/v1/finance/search",
+               {"q": terme, "quotesCount": 0, "newsCount": maxi,
+                "enableNavLinks": "false", "enableFuzzyQuery": "false"}, timeout=10.0)
+        for n in (j.get("news") or [])[:maxi]:
+            if not n.get("title") or not n.get("link"):
+                continue
+            out.append({"titre": n["title"], "lien": n["link"],
+                        "src": n.get("publisher") or "Yahoo Finance",
+                        "t": int(n["providerPublishTime"] * 1000) if n.get("providerPublishTime") else None,
+                        "cat": "titre", "tags": [terme] + list(n.get("relatedTickers") or [])[:3]})
+    except Exception:
+        pass
+    return out
+
+
+@app.get("/api/news")
+def news(q: str = "", macro: int = 1):
+    termes = [x.strip() for x in q.split("|") if x.strip()][:14]
+    cle = "news:" + "|".join(termes) + ":" + str(macro)
+    hit = cache_get(cle, NEWS_TTL)
+    if hit:
+        return JSONResponse(hit, headers={"Cache-Control": "no-store"})
+    items = []
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            if macro:
+                for lot in pool.map(lambda f: rss(f[0], f[1]), FLUX_MACRO):
+                    items.extend(lot)
+            if termes:
+                for lot in pool.map(yh_news, termes):
+                    items.extend(lot)
+    except Exception:
+        pass
+    vus, net = set(), []
+    for it in items:
+        if it["lien"] in vus:
+            continue
+        vus.add(it["lien"])
+        net.append(it)
+    net.sort(key=lambda x: x.get("t") or 0, reverse=True)
+    payload = {"asof": int(time.time() * 1000), "items": net[:120]}
+    if net:
+        cache_put(cle, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
