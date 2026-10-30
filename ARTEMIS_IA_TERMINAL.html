@@ -269,18 +269,36 @@ table.sc td:first-child{text-align:left;color:var(--amber-soft);overflow:hidden;
 table.sc tbody tr{cursor:pointer}
 table.sc tbody tr:hover{background:#15110a}
 .rk{display:inline-block;width:18px;color:var(--fg-dim);font-size:10px}
-/* Radar : charte Artemis */
-.radwrap{display:grid;gap:10px;padding:10px;grid-template-columns:minmax(0,1fr)}
-@media (min-width:1250px){.radwrap{grid-template-columns:minmax(0,420px) minmax(0,1fr)}}
-.radform{display:grid;gap:8px;align-content:start}
-.radform label{display:block;font-size:10px;letter-spacing:.09em;color:var(--cyan);margin-bottom:3px;text-transform:uppercase}
-.radform input,.radform textarea,.radform select{width:100%;background:#000;border:1px solid var(--grid2);
-  color:var(--fg);padding:4px 7px;border-radius:2px;font:inherit;font-size:11.5px;min-width:0}
-.radform textarea{resize:vertical;min-height:46px;line-height:1.5}
-.radrow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.radprev{background:#fff;border:1px solid var(--grid);border-radius:2px;overflow:hidden;min-height:520px}
-.radprev iframe{width:100%;height:78vh;border:0;display:block;background:#F4F6F7}
-.radbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 10px 0}
+/* ---------- F8 : calendrier ---------- */
+.calwrap{padding:10px 12px;max-width:1120px}
+.caljour{margin-bottom:14px}
+.caljour h4{font-family:var(--f-cond);font-size:13.5px;letter-spacing:.1em;color:var(--amber);
+  margin:0 0 6px;text-transform:uppercase;border-bottom:1px solid var(--grid);padding-bottom:4px;
+  display:flex;align-items:baseline;gap:10px}
+.caljour h4 span{color:var(--fg-dim);font-family:var(--f-mono);font-size:10.5px;letter-spacing:.04em;
+  text-transform:none}
+.caljour h4.auj{color:var(--up)}
+.calev{display:grid;grid-template-columns:62px 112px minmax(0,1fr) auto;gap:10px;align-items:baseline;
+  padding:4px 6px;border-bottom:1px solid #121618;font-size:11.5px}
+.calev:hover{background:#0e1215}
+.calev.cliq{cursor:pointer}
+.calev .hh{color:var(--fg-dim);font-variant-numeric:tabular-nums;font-size:10.5px}
+.calev .ty{font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;border:1px solid;border-radius:2px;
+  padding:1px 5px;justify-self:start;white-space:nowrap}
+.ty.bc{color:var(--cyan);border-color:#1d4a6b}
+.ty.res{color:var(--amber);border-color:var(--amber-dim)}
+.ty.perso{color:var(--up);border-color:#0a6b39}
+.calev .li{color:var(--fg);overflow:hidden;text-overflow:ellipsis}
+.calev .li b{color:var(--amber-soft);font-weight:600}
+.calev .dr{color:var(--fg-dim);font-size:10.5px;white-space:nowrap}
+.calbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:9px 12px;
+  border-bottom:1px solid var(--grid);background:var(--panel2)}
+.calbar select,.calbar input{background:#05070a;border:1px solid var(--grid2);color:var(--fg);
+  padding:4px 7px;border-radius:2px;font:inherit;font-size:11.5px}
+.calperso{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:9px 12px;
+  border-bottom:1px solid var(--grid);background:#0b0906}
+.calperso input[type=date]{width:140px}
+.calperso input[type=text]{min-width:230px;flex:1 1 230px}
 .tvbox{min-height:120px}
 .tvbox .tradingview-widget-container{min-height:100px}
 .tvnote{font-size:10.5px;color:var(--fg-dim);margin-top:6px;line-height:1.6}
@@ -432,7 +450,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
     <button class="fk" type="button" data-view="rates" aria-pressed="false"><kbd>F5</kbd>TAUX</button>
     <button class="fk" type="button" data-view="news" aria-pressed="false"><kbd>F6</kbd>NEWS</button>
     <button class="fk" type="button" data-view="scan" aria-pressed="false"><kbd>F7</kbd>SCANNER</button>
-    <button class="fk" type="button" data-view="radar" aria-pressed="false"><kbd>F8</kbd>RADAR</button>
+    <button class="fk" type="button" data-view="cal" aria-pressed="false"><kbd>F8</kbd>CALENDRIER</button>
     <button class="fk" type="button" data-view="admin" id="bt-admin" aria-pressed="false" hidden><kbd>F9</kbd>ADMIN<span class="pastille" id="pastille" hidden></span></button>
   </div>
   <div class="cmd-sep"></div>
@@ -490,7 +508,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       <div id="ratesview" hidden></div>
       <div id="newsview" hidden></div>
       <div id="scanview" hidden></div>
-      <div id="radarview" hidden></div>
+      <div id="calview" hidden></div>
       <div id="adminview" hidden></div>
     </div>
   </div>
@@ -807,6 +825,9 @@ var OUVERT=!(window.__ARTX)||window.__ARTX.ouvert!==false;
 })();
 /* le panneau d'administration n'existe que pour l'administrateur */
 if(cfg.view==="admin"&&!(window.__ARTX&&window.__ARTX.moi&&window.__ARTX.moi.role==="admin")) cfg.view="mon";
+/* le Radar a ete retire, une configuration enregistree pourrait encore le demander */
+if(cfg.view==="radar") cfg.view="cal";
+if(cfg.radar) delete cfg.radar;
 
 var __envoi=null;
 function pousser(){
@@ -1750,286 +1771,178 @@ function renderScan(){
   });
 }
 
-/* ---------- F8 : Le Radar d'Artemis, gabarit email officiel ---------- */
-var RAD_DEF={
-  intro:"", sources:"Yahoo Finance, BCE, Bundesbank, presse economique",
-  v:[{sym:"",punch:"",reco:"A l'achat",hor:"3 ans",a1:"",a2:"",a3:"",
-      croi:"",sect:"",carn:"",solv:"",cons:"",risq:"",verd:""},
-     {sym:"",punch:"",reco:"A surveiller",hor:"12 mois",a1:"",a2:"",a3:"",
-      croi:"",sect:"",carn:"",solv:"",cons:"",risq:"",verd:""}],
-  idees:[{t:"",x:""},{t:"",x:""},{t:"",x:""}],
-  movers:[{n:"",v:"",r:""},{n:"",v:"",r:""},{n:"",v:"",r:""},{n:"",v:"",r:""},{n:"",v:"",r:""}]
-};
-function radCfg(){
-  if(!cfg.radar) cfg.radar=JSON.parse(JSON.stringify(RAD_DEF));
-  var r=cfg.radar;
-  r.v=r.v||RAD_DEF.v; r.idees=r.idees||RAD_DEF.idees; r.movers=r.movers||RAD_DEF.movers;
-  return r;
-}
-function dateLongue(){
-  var d=new Date();
-  var s2=d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-  return s2.charAt(0).toUpperCase()+s2.slice(1);
-}
-function dateCourte(){
-  var d=new Date(), z=function(n){return (n<10?"0":"")+n;};
-  return z(d.getDate())+"/"+z(d.getMonth()+1)+"/"+d.getFullYear();
-}
-function moversAuto(){
-  var l=univers().filter(function(o){return !o.nf;}).map(function(o){
-    var q=Q[o.y]||{};
-    return {y:o.y, n:o.n, pct:q.pct};
-  }).filter(function(r){ return r.pct!=null&&isFinite(r.pct); });
-  l.sort(function(a,b){ return Math.abs(b.pct)-Math.abs(a.pct); });
-  return l.slice(0,5);
-}
-function styleVal(v){
-  return (v!=null&&isFinite(v)&&v>0) ? "color:#1B7A4B;font-weight:bold;"
-                                     : "color:#1A1A2E;font-weight:normal;";
-}
-function valFr(v){
-  if(v==null||!isFinite(v)) return "n.d.";
-  return (v>0?"+":"")+v.toFixed(2).replace(".",",")+" %";
-}
-function nettoie(t){
-  /* regles de marque : ni tiret cadratin ni point-virgule dans le texte */
-  return String(t||"").replace(/—/g,", ").replace(/\s*;\s*/g,", ");
-}
-function radarHtml(){
-  var r=radCfg(), E=esc;
-  var movers=r.movers.map(function(m,i){
-    var auto=moversAuto()[i]||{};
-    var nom=m.n||auto.n||"", vv=m.v|| (auto.pct!=null?valFr(auto.pct):""), raison=m.r||"";
-    var pos=/^\+/.test(vv);
-    return '<td width="20%" align="center" valign="top" style="padding:10px 4px;border-right:1px solid #C9D2D6;">'+
-      '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:9px;letter-spacing:1.2px;color:#5A5A66;text-transform:uppercase;">'+E(nom)+'</div>'+
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;color:'+(pos?"#1B7A4B":"#1F4E5F")+';margin:4px 0 2px 0;">'+E(vv)+'</div>'+
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:10px;color:#5A5A66;line-height:1.3;">'+E(nettoie(raison))+'</div></td>';
-  }).join("");
+/* ---------- F8 : calendrier economique ---------- */
+var CAL=null, calCharge=false;
+var CAL_MOIS=["janvier","fevrier","mars","avril","mai","juin","juillet","aout",
+              "septembre","octobre","novembre","decembre"];
+var CAL_JOURS=["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
 
-  var blocs=r.v.map(function(b,idx){
-    var o=SYMS[b.sym]||{}, q=Q[b.sym]||{}, P=b.sym?perfs(b.sym):{};
-    var achat=/achat/i.test(b.reco);
-    var fond=achat?"#EAF1F3":"#F3E9EB", coul=achat?"#1F4E5F":"#6B1D2D";
-    var kpis=[["Cours", q.p!=null?fmt(q.p)+" "+(q.cur||o.c||""):"n.d.", "dernier cours", q.pct],
-              ["Variation jour", valFr(q.pct), "seance en cours", q.pct],
-              ["Volatilite 1 an", (volAnn(b.sym,252)!=null?volAnn(b.sym,252).toFixed(1).replace(".",",")+" %":"n.d."), "realisee", null],
-              ["Ecart au plus haut", valFr(prochePlusHaut(b.sym)), "52 semaines", prochePlusHaut(b.sym)]];
-    var tuiles=kpis.map(function(k){
-      return '<td width="25%" align="center" valign="top" style="padding:10px 4px;border-right:1px solid #C9D2D6;">'+
-        '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:9px;letter-spacing:1.2px;color:#5A5A66;text-transform:uppercase;">'+E(k[0])+'</div>'+
-        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:21px;color:'+((k[3]!=null&&k[3]>0)?"#1B7A4B":"#1F4E5F")+';margin:4px 0 2px 0;">'+E(k[1])+'</div>'+
-        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:10px;color:#5A5A66;line-height:1.3;">'+E(k[2])+'</div></td>';
-    }).join("");
-    var axes=[b.a1,b.a2,b.a3].map(function(a,i){
-      return '<tr><td valign="top" style="font-family:Georgia,\'Times New Roman\',serif;font-size:16px;color:#6B1D2D;padding:2px 8px 6px 0;width:18px;">'+(i+1)+'</td>'+
-        '<td style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:12.5px;line-height:1.5;color:#1A1A2E;padding:3px 0 6px 0;">'+E(nettoie(a))+'</td></tr>';
-    }).join("");
-    function section(titre,txt){
-      return '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;font-weight:bold;color:#6B1D2D;margin:14px 0 5px 0;">'+titre+'</div>'+
-        '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#1A1A2E;">'+E(nettoie(txt))+'</div>';
-    }
-    var fen=[["1 jour",P.d],["1 semaine",P.w],["1 mois",P.m],["YTD",P.ytd],["1 an",P.y1],["3 ans",P.y3]];
-    var perfs6=fen.map(function(f){
-      return '<td width="16%" align="center" valign="top" style="padding:8px 3px;border-right:1px solid #C9D2D6;">'+
-        '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:9.5px;letter-spacing:1px;color:#1F4E5F;font-weight:bold;text-transform:uppercase;padding-bottom:4px;border-bottom:2px solid #1F4E5F;margin:0 6px 5px 6px;">'+f[0]+'</div>'+
-        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:16px;'+styleVal(f[1])+'">'+valFr(f[1])+'</div></td>';
-    }).join("");
-    return '<tr><td style="padding:26px 34px 8px 34px;">'+
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:19px;color:#1F4E5F;font-weight:bold;border-bottom:1px solid #C9D2D6;padding-bottom:7px;"><span style="color:#6B1D2D;">'+(idx+1)+'.</span> '+E(o.n||b.sym||"Valeur")+'</div>'+
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:15px;color:#6B1D2D;margin:8px 0 8px 0;line-height:1.4;">&laquo; '+E(nettoie(b.punch))+' &raquo;</div>'+
-      '<div><span style="display:inline-block;background:'+fond+';color:'+coul+';font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:10.5px;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;padding:3px 9px;border-radius:3px;">'+E(b.reco)+'</span>'+
-      ' <span style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:11px;color:#5A5A66;margin-left:6px;">Horizon : <b style="color:#1A1A2E;">'+E(b.hor)+'</b></span></div>'+
-      '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-top:1px solid #C9D2D6;border-bottom:1px solid #C9D2D6;margin:14px 0;"><tr>'+tuiles+'</tr></table>'+
-      '<div style="background:#EAF1F3;border-left:4px solid #1F4E5F;padding:12px 16px;margin:4px 0 6px 0;">'+
-        '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:9.5px;letter-spacing:1.4px;color:#1F4E5F;font-weight:bold;text-transform:uppercase;margin-bottom:6px;">Les axes marquants</div>'+
-        '<table cellpadding="0" cellspacing="0">'+axes+'</table></div>'+
-      section("Perspectives de croissance",b.croi)+
-      section("Contexte sectoriel et positionnement",b.sect)+
-      section("Carnet de commandes et visibilite",b.carn)+
-      section("Solvabilite",b.solv)+
-      section("Consensus",b.cons)+
-      section("Risques",b.risq)+
-      '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:13px;font-weight:bold;color:#6B1D2D;margin:14px 0 5px 0;">Performances</div>'+
-      '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-top:1px solid #C9D2D6;border-bottom:1px solid #C9D2D6;margin:6px 0 14px 0;"><tr>'+perfs6+'</tr></table>'+
-      '<div style="background:'+fond+';border:1px solid '+coul+';padding:12px 16px;margin:6px 0 4px 0;">'+
-        '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:14px;font-weight:bold;color:'+coul+';margin-bottom:4px;">Verdict : '+E(b.reco)+'</div>'+
-        '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:12.5px;line-height:1.55;color:#1A1A2E;">'+E(nettoie(b.verd))+'</div></div>'+
-      '</td></tr>';
-  }).join("");
-
-  var idees=r.idees.map(function(i){
-    return '<tr><td valign="top" style="color:#6B1D2D;font-family:Georgia,\'Times New Roman\',serif;font-size:14px;padding:3px 10px 8px 0;">&#9656;</td>'+
-      '<td style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:12.5px;line-height:1.55;color:#1A1A2E;padding-bottom:8px;"><b>'+E(nettoie(i.t))+'</b> : '+E(nettoie(i.x))+'</td></tr>';
-  }).join("");
-
-  return '<!DOCTYPE html>\n<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Le Radar d\'Artemis</title></head>'+
-  '<body style="margin:0;padding:0;background:#F4F6F7;">'+
-  '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F4F6F7;"><tr><td align="center" style="padding:18px 8px;">'+
-  '<table width="680" cellpadding="0" cellspacing="0" style="max-width:680px;width:100%;background:#FFFFFF;border-collapse:collapse;">'+
-  '<tr><td align="center" style="padding:24px 34px 6px 34px;">'+
-  '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:10.5px;letter-spacing:3px;color:#1F4E5F;font-weight:bold;text-transform:uppercase;padding-bottom:10px;border-bottom:1px solid #C9D2D6;margin-bottom:14px;">Artemis Investment Advisors</div>'+
-  '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:32px;font-weight:bold;color:#1F4E5F;">Le Radar d\'Artemis</div>'+
-  '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:17px;color:#6B1D2D;margin-top:4px;">'+E(dateLongue())+'</div>'+
-  '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:11.5px;color:#5A5A66;margin-top:6px;">Deux convictions du jour &middot; analyse fondamentale et recommandation, horizon 3 mois &agrave; 5 ans</div>'+
-  '</td></tr>'+
-  '<tr><td style="padding:0 34px;">'+
-  '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:9.5px;letter-spacing:1.4px;color:#6B1D2D;font-weight:bold;text-transform:uppercase;text-align:center;margin-top:12px;">Market movers de la s&eacute;ance</div>'+
-  '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border-top:1px solid #C9D2D6;border-bottom:1px solid #C9D2D6;margin:14px 0;"><tr>'+movers+'</tr></table>'+
-  '<div style="font-family:Georgia,\'Times New Roman\',serif;font-style:italic;font-size:12.5px;line-height:1.6;color:#1A1A2E;">'+E(nettoie(r.intro))+'</div>'+
-  '</td></tr>'+
-  blocs+
-  '<tr><td style="padding:22px 34px 24px 34px;">'+
-  '<div style="font-family:Georgia,\'Times New Roman\',serif;font-size:19px;color:#1F4E5F;font-weight:bold;border-bottom:1px solid #C9D2D6;padding-bottom:7px;"><span style="color:#6B1D2D;">3.</span> Id&eacute;es de structuration</div>'+
-  '<table cellpadding="0" cellspacing="0" style="margin-top:10px;">'+idees+'</table></td></tr>'+
-  '<tr><td style="background:#1F4E5F;padding:16px 34px;">'+
-  '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:10px;color:#FFFFFF;line-height:1.5;">Artemis Investment Advisors &middot; ORIAS n&deg; 24006144 &middot; CIF r&eacute;gul&eacute; ACPR / AMF</div>'+
-  '<div style="font-family:Calibri,\'Segoe UI\',Arial,sans-serif;font-size:10px;color:#C9D2D6;line-height:1.5;">Document r&eacute;serv&eacute; aux investisseurs professionnels (MIF II) &middot; confidentiel. Sources : '+E(r.sources)+'.</div>'+
-  '</td></tr></table></td></tr></table></body></html>';
+function isoAuj(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function isoEnLettres(iso){
+  var p=String(iso).split("-"); if(p.length!==3) return iso;
+  var d=new Date(+p[0],+p[1]-1,+p[2]);
+  return CAL_JOURS[d.getDay()]+" "+(+p[2])+" "+CAL_MOIS[+p[1]-1]+" "+p[0];
 }
-function renderRadar(){
-  var el=$("radarview"); if(!el) return;
-  var r=radCfg();
-  if(el.dataset.pret==="1"){ majApercuRadar(); return; }
-  var opts=function(sel){
-    return '<option value="">choisir un sous-jacent</option>'+
-      univers().filter(function(o){return !o.nf;}).map(function(o){
-        return '<option value="'+esc(o.y)+'"'+(sel===o.y?" selected":"")+">"+esc(o.n)+"</option>";
-      }).join("");
-  };
-  function champ(cle,lib,lignes,val){
-    return '<div><label for="r-'+cle+'">'+esc(lib)+"</label>"+
-      (lignes>1?'<textarea id="r-'+cle+'" rows="'+lignes+'">'+esc(val||"")+"</textarea>"
-               :'<input id="r-'+cle+'" value="'+esc(val||"")+'">')+"</div>";
+function joursRestants(iso){
+  var p=String(iso).split("-");
+  var d=new Date(+p[0],+p[1]-1,+p[2]), a=new Date(); a.setHours(0,0,0,0);
+  return Math.round((d-a)/86400000);
+}
+function echeance(n){
+  if(n===0) return "aujourd'hui";
+  if(n===1) return "demain";
+  if(n===-1) return "hier";
+  return n>0 ? ("dans "+n+" jours") : ("il y a "+(-n)+" jours");
+}
+function calCibles(){
+  var l = (cfg.calport==="univers") ? univers() : currentList();
+  return l.filter(function(o){ return !o.nf && (!o.t||o.t==="EQ"); }).slice(0,120);
+}
+function loadCal(force){
+  var el=$("calview");
+  var cle=(cfg.calport||"liste")+":"+cfg.tab+":"+(cfg.caljours||90);
+  if(calCharge) return;
+  if(!force && CAL && CAL.cle===cle && Date.now()-CAL.at<900000){ renderCal(); return; }
+  calCharge=true;
+  if(el && (!CAL||CAL.cle!==cle)) el.innerHTML='<div class="empty">Chargement du calendrier...</div>';
+  var cibles=calCibles();
+  var base=(cfg.base||"").replace(/\/$/,"");
+  var url=base+"/api/calendrier?jours="+(cfg.caljours||90)+
+    "&syms="+encodeURIComponent(cibles.map(function(o){return o.y;}).join(","))+
+    "&noms="+encodeURIComponent(cibles.map(function(o){return o.n;}).join("|"));
+  jget(url,45000).then(function(j){ CAL={d:j,at:Date.now(),cle:cle}; })
+    .catch(function(e){ CAL={err:(e&&e.message)||"indisponible",at:Date.now(),cle:cle}; })
+    .then(function(){ calCharge=false; renderCal(); });
+}
+function evPerso(){ return (cfg.calperso||[]).slice(); }
+function ajouterEvPerso(iso,texte){
+  if(!iso||!texte) return;
+  cfg.calperso=cfg.calperso||[];
+  cfg.calperso.push({date:iso,libelle:String(texte).slice(0,120)});
+  cfg.calperso.sort(function(a,b){ return a.date<b.date?-1:1; });
+  save(); renderCal();
+}
+function retirerEvPerso(iso,texte){
+  cfg.calperso=(cfg.calperso||[]).filter(function(e){ return !(e.date===iso&&e.libelle===texte); });
+  save(); renderCal();
+}
+function renderCal(){
+  var el=$("calview"); if(!el) return;
+  if(!CAL&&!calCharge){ loadCal(); return; }
+  var f=cfg.calf||"tout";
+  var evs=[];
+  if(CAL&&CAL.d&&CAL.d.evenements) evs=CAL.d.evenements.slice();
+  evPerso().forEach(function(e){
+    evs.push({date:e.date,type:"perso",inst:"",libelle:e.libelle,note:"",sym:"",nom:""});
+  });
+  var vus=evs.filter(function(x){ return f==="tout"||f===x.type; }).sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    return (a.type+a.libelle)<(b.type+b.libelle)?-1:1;
+  });
+  var nbRes=evs.filter(function(x){return x.type==="res";}).length;
+  var muets=(CAL&&CAL.d&&CAL.d.resultats_muets)||0;
+  var dispo=(CAL&&CAL.d&&CAL.d.resultats_disponibles)||0;
+  var barre='<div class="calbar">'+
+    [["tout","TOUT"],["bc","BANQUES CENTRALES"],["res","RESULTATS"],["perso","MES ECHEANCES"]]
+      .map(function(k){
+        return '<button class="fk" type="button" data-cf="'+k[0]+'" aria-pressed="'+(f===k[0]?"true":"false")+'">'+k[1]+"</button>";
+      }).join("")+
+    '<span class="spacer" style="flex:1 1 auto"></span>'+
+    '<label class="flat" style="font-size:10.5px">RESULTATS DE '+
+      '<select id="cal-port"><option value="liste">LA LISTE COURANTE</option>'+
+      '<option value="univers">TOUT L\'UNIVERS</option></select></label>'+
+    '<label class="flat" style="font-size:10.5px">HORIZON '+
+      '<select id="cal-jours"><option value="30">30 JOURS</option><option value="90">90 JOURS</option>'+
+      '<option value="180">6 MOIS</option><option value="365">1 AN</option></select></label>'+
+    '<button class="fk" type="button" id="cal-reload">ACTUALISER</button></div>'+
+    '<div class="calperso"><input id="cal-date" type="date" aria-label="Date de l\'echeance">'+
+      '<input id="cal-lib" type="text" placeholder="Mon echeance : constatation, rappel client, comite..." maxlength="120">'+
+      '<button class="fk" type="button" id="cal-add">AJOUTER</button>'+
+      '<span class="flat" style="font-size:10.5px">Visible de vous seul.</span></div>';
+  if(CAL&&CAL.err){
+    el.innerHTML=barre+'<div class="empty">Calendrier indisponible ('+esc(CAL.err)+').</div>';
+    brancherCal(); return;
   }
-  var blocsV=r.v.map(function(b,i){
-    var n=i+1;
-    return '<div class="panel"><h4>Valeur '+n+"</h4>"+
-      '<div><label for="r-v'+n+'-sym">Sous-jacent</label><select id="r-v'+n+'-sym">'+opts(b.sym)+"</select></div>"+
-      '<div class="radrow">'+
-        '<div><label for="r-v'+n+'-reco">Recommandation</label><select id="r-v'+n+'-reco">'+
-          ["A l'achat","A surveiller"].map(function(x){return '<option'+(b.reco===x?" selected":"")+">"+esc(x)+"</option>";}).join("")+
-        "</select></div>"+
-        champ("v"+n+"-hor","Horizon",1,b.hor)+
-      "</div>"+
-      champ("v"+n+"-punch","Punchline",2,b.punch)+
-      champ("v"+n+"-a1","Axe 1",2,b.a1)+
-      champ("v"+n+"-a2","Axe 2",2,b.a2)+
-      champ("v"+n+"-a3","Axe 3",2,b.a3)+
-      champ("v"+n+"-croi","Perspectives de croissance",3,b.croi)+
-      champ("v"+n+"-sect","Contexte sectoriel",3,b.sect)+
-      champ("v"+n+"-carn","Carnet et visibilite",3,b.carn)+
-      champ("v"+n+"-solv","Solvabilite",3,b.solv)+
-      champ("v"+n+"-cons","Consensus",3,b.cons)+
-      champ("v"+n+"-risq","Risques",3,b.risq)+
-      champ("v"+n+"-verd","Verdict",3,b.verd)+
-      "</div>";
-  }).join("");
-  var moversF=r.movers.map(function(m,i){
-    var a=moversAuto()[i]||{};
-    return '<div class="radrow" style="grid-template-columns:1fr 70px 1.4fr">'+
-      '<input id="r-m'+i+'-n" placeholder="'+esc(a.n||"nom")+'" value="'+esc(m.n||"")+'">'+
-      '<input id="r-m'+i+'-v" placeholder="'+esc(a.pct!=null?valFr(a.pct):"+0,00 %")+'" value="'+esc(m.v||"")+'">'+
-      '<input id="r-m'+i+'-r" placeholder="raison, moins de 45 caracteres" value="'+esc(m.r||"")+'">'+
-      "</div>";
-  }).join("");
-  var ideesF=r.idees.map(function(it,i){
-    return '<div class="radrow" style="grid-template-columns:1fr 2fr">'+
-      '<input id="r-i'+i+'-t" placeholder="titre" value="'+esc(it.t||"")+'">'+
-      '<input id="r-i'+i+'-x" placeholder="idee de structuration" value="'+esc(it.x||"")+'">'+
-      "</div>";
-  }).join("");
-
-  el.innerHTML='<div class="radbar">'+
-      '<span class="flat" style="font-size:10.5px">Le Radar d\'Artemis  ·  '+esc(dateCourte())+
-      '  ·  gabarit email valide, chiffres repris du terminal</span>'+
-      '<span class="spacer" style="flex:1 1 auto"></span>'+
-      '<button class="fk" type="button" id="rad-auto">REMPLIR LES CHIFFRES</button>'+
-      '<button class="fk" type="button" id="rad-copy">COPIER LE HTML</button>'+
-      '<button class="fk" type="button" id="rad-open">OUVRIR</button>'+
-      '<button class="fk" type="button" id="rad-print">IMPRIMER</button>'+
-    "</div>"+
-    '<div class="radwrap"><div class="radform">'+
-      '<div class="panel"><h4>Market movers de la seance</h4>'+
-        '<div class="lgd flat" style="margin:0 0 6px">Laisse vide pour reprendre automatiquement les cinq plus forts mouvements du terminal.</div>'+
-        moversF+"</div>"+
-      '<div class="panel"><h4>Introduction</h4>'+champ("intro","Contexte macro de la veille, 4 a 5 lignes",5,r.intro)+"</div>"+
-      blocsV+
-      '<div class="panel"><h4>Idees de structuration</h4>'+ideesF+"</div>"+
-      '<div class="panel"><h4>Sources</h4>'+champ("sources","Liste courte",1,r.sources)+"</div>"+
-    '</div><div class="radprev"><iframe id="rad-iframe" title="Apercu du Radar"></iframe></div></div>';
-  el.dataset.pret="1";
-
-  function lire(){
-    var g=function(id){ var e=document.getElementById("r-"+id); return e?e.value:""; };
-    r.intro=g("intro"); r.sources=g("sources");
-    r.v.forEach(function(b,i){
-      var n=i+1;
-      b.sym=g("v"+n+"-sym"); b.reco=g("v"+n+"-reco"); b.hor=g("v"+n+"-hor");
-      b.punch=g("v"+n+"-punch"); b.a1=g("v"+n+"-a1"); b.a2=g("v"+n+"-a2"); b.a3=g("v"+n+"-a3");
-      b.croi=g("v"+n+"-croi"); b.sect=g("v"+n+"-sect"); b.carn=g("v"+n+"-carn");
-      b.solv=g("v"+n+"-solv"); b.cons=g("v"+n+"-cons"); b.risq=g("v"+n+"-risq"); b.verd=g("v"+n+"-verd");
-    });
-    r.movers.forEach(function(m,i){ m.n=g("m"+i+"-n"); m.v=g("m"+i+"-v"); m.r=g("m"+i+"-r"); });
-    r.idees.forEach(function(it,i){ it.t=g("i"+i+"-t"); it.x=g("i"+i+"-x"); });
-    save();
-  }
-  window.__radLire=lire;
-  el.addEventListener("input",function(){ lire(); majApercuRadar(); });
-  el.addEventListener("change",function(e){
-    lire();
-    if(/-sym$/.test(e.target.id)&&e.target.value){
-      ensureHist(e.target.value).then(majApercuRadar);
-      probe([e.target.value]).then(function(q){ applyQuotes(q); majApercuRadar(); }).catch(function(){});
+  var corps="", jour=null, auj=isoAuj();
+  vus.forEach(function(x){
+    if(x.date!==jour){
+      if(jour!==null) corps+="</div>";
+      jour=x.date;
+      corps+='<div class="caljour"><h4'+(jour===auj?' class="auj"':"")+'>'+esc(isoEnLettres(jour))+
+        "<span>"+esc(echeance(joursRestants(jour)))+"</span></h4>";
     }
-    majApercuRadar();
+    var lib, droite;
+    if(x.type==="res"){
+      var q=Q[x.sym]||{};
+      lib="<b>"+esc(x.nom||x.sym)+"</b>  "+esc(x.libelle);
+      droite=q.p!=null ? (fmt(q.p)+'  <span class="'+cls(q.pct)+'">'+pct(q.pct)+"</span>") : esc(x.sym);
+    } else if(x.type==="bc"){
+      lib="<b>"+esc(x.inst)+"</b>  "+esc(x.libelle);
+      droite=x.note?esc(x.note):"";
+    } else {
+      lib=esc(x.libelle);
+      droite='<button class="fk" type="button" data-sup="'+esc(x.date)+'|'+esc(x.libelle)+'">RETIRER</button>';
+    }
+    corps+='<div class="calev'+(x.type==="res"?" cliq":"")+'"'+(x.type==="res"?' data-y="'+esc(x.sym)+'"':"")+'>'+
+      '<span class="hh">'+(x.type==="res"?"resultats":(x.type==="bc"?"decision":"perso"))+"</span>"+
+      '<span class="ty '+esc(x.type)+'">'+(x.type==="bc"?"banque centrale":(x.type==="res"?"resultats":"mon echeance"))+"</span>"+
+      '<span class="li">'+lib+"</span>"+
+      '<span class="dr">'+droite+"</span></div>";
   });
-  $("rad-auto").addEventListener("click",function(){
-    r.movers.forEach(function(m,i){
-      var a=moversAuto()[i]; if(!a) return;
-      document.getElementById("r-m"+i+"-n").value=a.n;
-      document.getElementById("r-m"+i+"-v").value=valFr(a.pct);
+  if(jour!==null) corps+="</div>";
+  if(!vus.length) corps='<div class="empty">Aucune echeance sur la periode retenue.</div>';
+  var pied="";
+  if(f==="tout"||f==="res"){
+    pied='<div class="lgd flat" style="padding:4px 12px 14px">'+
+      nbRes+" publication"+(nbRes>1?"s":"")+" de resultats sur la periode, "+
+      dispo+" sous-jacent"+(dispo>1?"s":"")+" renseigne"+(dispo>1?"s":"")+
+      (muets?(", "+muets+" sans date connue de la source"):"")+
+      ".  Dates de reunion publiees par la BCE, la Reserve federale, la Banque d'Angleterre "+
+      "et la Banque du Japon. Celles de 2027 cote Fed restent indicatives.</div>";
+  }
+  el.innerHTML=barre+'<div class="calwrap">'+corps+"</div>"+pied;
+  brancherCal();
+}
+function brancherCal(){
+  var el=$("calview"); if(!el) return;
+  el.querySelectorAll("[data-cf]").forEach(function(b){
+    b.addEventListener("click",function(){ cfg.calf=b.getAttribute("data-cf"); save(); renderCal(); });
+  });
+  var p=$("cal-port"); if(p){ p.value=cfg.calport||"liste";
+    p.addEventListener("change",function(){ cfg.calport=p.value; save(); loadCal(true); }); }
+  var j=$("cal-jours"); if(j){
+    var v=String(cfg.caljours||90);
+    j.value = j.querySelector('option[value="'+v+'"]') ? v : "90";
+    if(j.value!==v){ cfg.caljours=+j.value; }
+    j.addEventListener("change",function(){ cfg.caljours=+j.value; save(); loadCal(true); }); }
+  var r=$("cal-reload"); if(r) r.addEventListener("click",function(){ loadCal(true); });
+  var a=$("cal-add");
+  if(a) a.addEventListener("click",function(){
+    var d=$("cal-date"), l=$("cal-lib");
+    if(!d.value||!l.value.trim()){ toast("Indiquez une date et un libelle."); return; }
+    ajouterEvPerso(d.value,l.value.trim()); l.value="";
+  });
+  el.querySelectorAll("[data-sup]").forEach(function(b){
+    b.addEventListener("click",function(){
+      var v=b.getAttribute("data-sup").split("|");
+      retirerEvPerso(v[0],v.slice(1).join("|"));
     });
-    lire(); majApercuRadar();
-    toast("Movers et performances repris du terminal.");
   });
-  $("rad-copy").addEventListener("click",function(){
-    var h=radarHtml();
-    if(navigator.clipboard&&navigator.clipboard.writeText){
-      navigator.clipboard.writeText(h).then(function(){ toast("HTML copie, collez-le dans le corps de l'email."); })
-        .catch(function(){ toast("Copie refusee par le navigateur."); });
-    } else toast("Copie indisponible ici.");
+  el.querySelectorAll(".calev.cliq[data-y]").forEach(function(d){
+    d.addEventListener("click",function(){ select(d.getAttribute("data-y"),true); });
   });
-  $("rad-open").addEventListener("click",function(){
-    try{
-      var b=new Blob([radarHtml()],{type:"text/html"});
-      var u=URL.createObjectURL(b);
-      var a=document.createElement("a"); a.href=u; a.target="_blank"; a.rel="noopener";
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(function(){ URL.revokeObjectURL(u); },30000);
-    }catch(e){ toast("Ouverture impossible depuis cette page."); }
-  });
-  $("rad-print").addEventListener("click",function(){
-    var f=document.getElementById("rad-iframe");
-    try{ f.contentWindow.focus(); f.contentWindow.print(); }
-    catch(e){ toast("Impression indisponible depuis cette page."); }
-  });
-  majApercuRadar();
 }
-function majApercuRadar(){
-  var f=document.getElementById("rad-iframe"); if(!f) return;
-  f.srcdoc=radarHtml();
-}
+
 function renderAll(){
   var heat=$("heat"), mon=$("mon"), ch=$("charts"), pv=$("perfview"), rv=$("ratesview"), nv=$("newsview"),
-      sv=$("scanview"), dv=$("radarview"), av=$("adminview");
+      sv=$("scanview"), cv2=$("calview"), av=$("adminview");
   heat.hidden = cfg.view!=="heat";
   ch.hidden   = cfg.view!=="charts";
   pv.hidden   = cfg.view!=="perf";
   rv.hidden   = cfg.view!=="rates";
   nv.hidden   = cfg.view!=="news";
   sv.hidden   = cfg.view!=="scan";
-  dv.hidden   = cfg.view!=="radar";
+  cv2.hidden  = cfg.view!=="cal";
   av.hidden   = cfg.view!=="admin";
   mon.hidden  = (cfg.view!=="mon");
   if(cfg.view==="heat") renderHeat();
@@ -2038,7 +1951,7 @@ function renderAll(){
   else if(cfg.view==="rates") loadRates();
   else if(cfg.view==="news") loadNews();
   else if(cfg.view==="scan"){ renderScan(); chaufferScanner(); }
-  else if(cfg.view==="radar") renderRadar();
+  else if(cfg.view==="cal") loadCal();
   else if(cfg.view==="admin") renderAdmin();
   else renderTable();
   renderDetail(); renderTape();
@@ -2683,7 +2596,7 @@ $("ranges").addEventListener("click",function(e){
 });
 document.addEventListener("keydown",function(e){
   if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
-  var map={F1:"mon",F2:"heat",F3:"perf",F4:"charts",F5:"rates",F6:"news",F7:"scan",F8:"radar",F9:"admin"};
+  var map={F1:"mon",F2:"heat",F3:"perf",F4:"charts",F5:"rates",F6:"news",F7:"scan",F8:"cal",F9:"admin"};
   if(map[e.key]){ e.preventDefault(); var b=document.querySelector('.fk[data-view="'+map[e.key]+'"]'); if(b) b.click(); }
   if(e.key==="/"){ e.preventDefault(); $("q").focus(); }
 });
