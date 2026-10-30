@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import re
 import os
 import time
@@ -26,35 +27,55 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 import requests
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-app = FastAPI(title="Artemis IA Terminal API", version="8.0")
+import comptes
+from accueil import ACCUEIL
+
+app = FastAPI(title="Artemis IA Terminal API", version="9.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
 
+comptes.init()
+
+
+def _ouvert() -> bool:
+    """Sans compte administrateur configure, le terminal reste accessible comme avant."""
+    return not bool(os.environ.get("ADMIN_EMAIL") and os.environ.get("ADMIN_PASSWORD"))
+
+
+def _moi(request: Request):
+    return comptes.utilisateur_du_jeton(request.cookies.get(comptes.COOKIE))
+
+
+LIBRES = ("/health", "/auth/", "/manifest.webmanifest", "/icon.svg", "/sw.js", "/favicon.ico")
+
+
+@app.middleware("http")
+async def verrou(request: Request, call_next):
+    chemin = request.url.path
+    if _ouvert() or chemin.startswith(LIBRES):
+        return await call_next(request)
+    if chemin in ("/", "/terminal") or chemin.startswith("/api/") \
+            or chemin.startswith("/admin/") or chemin.startswith("/cfg"):
+        u = _moi(request)
+        if not u:
+            if chemin == "/":
+                return HTMLResponse(ACCUEIL)
+            if chemin == "/terminal":
+                return RedirectResponse("/", status_code=303)
+            return JSONResponse({"detail": "Authentification requise"}, status_code=401)
+        if chemin.startswith("/admin/") and u["role"] != "admin":
+            return JSONResponse({"detail": "Reserve a l'administrateur"}, status_code=403)
+        request.state.moi = u
+    return await call_next(request)
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.join(HERE, "ARTEMIS_IA_TERMINAL.html")
-
-
-def page_path() -> str:
-    """Un navigateur suffixe les telechargements repetes et GitHub cree alors un
-    nouveau fichier au lieu de remplacer l'ancien. On retient donc la variante la
-    plus recente plutot qu'un nom fige."""
-    import glob as _glob
-    import re as _re
-    cands = _glob.glob(os.path.join(HERE, "ARTEMIS_IA_TERMINAL*.htm*"))
-    if not cands:
-        return PAGE
-
-    def rank(p):
-        m = _re.search(r"[_ -]\(?(\d+)\)?\.html?$", os.path.basename(p))
-        return (int(m.group(1)) if m else 0, os.path.getmtime(p))
-
-    return max(cands, key=rank)
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
@@ -66,28 +87,6 @@ S.headers.update({
 })
 
 YH_HOSTS = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
-_crumb = {"v": None, "at": 0.0}
-
-
-def yh_crumb() -> Optional[str]:
-    """Jeton exige par l'endpoint analystes. Souvent refuse depuis un hebergeur."""
-    if _crumb["v"] and time.time() - _crumb["at"] < 3600:
-        return _crumb["v"]
-    for seed in ("https://finance.yahoo.com/quote/AAPL", "https://fc.yahoo.com"):
-        try:
-            S.get(seed, timeout=8)
-        except Exception:
-            continue
-    for host in YH_HOSTS:
-        try:
-            r = S.get(host + "/v1/test/getcrumb", timeout=8)
-            if r.status_code == 200 and r.text and len(r.text) < 40:
-                _crumb["v"] = r.text.strip()
-                _crumb["at"] = time.time()
-                return _crumb["v"]
-        except Exception:
-            continue
-    return None
 
 # ----------------------------------------------------------------- cache
 _lock = threading.Lock()
@@ -206,8 +205,10 @@ def yh_chart(sym: str, rng: str, interval: str) -> dict:
     q0 = (r.get("indicators", {}).get("quote") or [{}])[0]
     closes = q0.get("close") or []
     vols = q0.get("volume") or []
+    highs = q0.get("high") or []
+    lows = q0.get("low") or []
     stamps = r.get("timestamp") or []
-    T, C, V = [], [], []
+    T, C, V, HI, LO = [], [], [], [], []
     for i, ts in enumerate(stamps):
         c = closes[i] if i < len(closes) else None
         if c is None:
@@ -215,7 +216,10 @@ def yh_chart(sym: str, rng: str, interval: str) -> dict:
         T.append(int(ts) * 1000)
         C.append(float(c))
         V.append(float(vols[i]) if i < len(vols) and vols[i] is not None else None)
-    return {"t": T, "c": C, "v": V, "at": int(time.time() * 1000), "src": "yahoo"}
+        HI.append(float(highs[i]) if i < len(highs) and highs[i] is not None else None)
+        LO.append(float(lows[i]) if i < len(lows) and lows[i] is not None else None)
+    return {"t": T, "c": C, "v": V, "hi": HI, "lo": LO,
+            "at": int(time.time() * 1000), "src": "yahoo"}
 
 def _f(v):
     try:
@@ -388,43 +392,6 @@ def history(symbol: str, range: str = "5y"):
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
-def yh_dividends(sym: str) -> Dict[str, Any]:
-    """Rendement du dividende reconstitue depuis les evenements du graphique."""
-    j = yh("/v8/finance/chart/" + sym,
-           {"range": "2y", "interval": "1d", "events": "div"}, timeout=10.0)
-    res = (j.get("chart") or {}).get("result") or []
-    if not res:
-        return {}
-    r = res[0]
-    meta = r.get("meta") or {}
-    price = _f(meta.get("regularMarketPrice"))
-    divs = ((r.get("events") or {}).get("dividends") or {})
-    rows = []
-    for ev in divs.values():
-        ts, amt = _f(ev.get("date")), _f(ev.get("amount"))
-        if ts and amt:
-            rows.append((ts, amt))
-    rows.sort()
-    cut = time.time() - 366 * 86400
-    ttm = sum(a for ts, a in rows if ts >= cut)
-    out: Dict[str, Any] = {
-        "divTtm": ttm or None,
-        "divYield": (ttm / price * 100) if (ttm and price) else None,
-        "divLast": rows[-1][1] if rows else None,
-        "divLastDate": int(rows[-1][0] * 1000) if rows else None,
-        "divCount": len([1 for ts, _ in rows if ts >= cut]),
-    }
-    closes = (r.get("indicators", {}).get("quote") or [{}])[0].get("close") or []
-    stamps = r.get("timestamp") or []
-    yr = time.time() - 366 * 86400
-    win = [c for i, c in enumerate(closes) if c is not None and i < len(stamps) and stamps[i] >= yr]
-    if win:
-        out["hi52"] = max(win)
-        out["lo52"] = min(win)
-    out["price"] = price
-    return out
-
-
 @app.get("/api/consensus")
 def consensus(symbol: str):
     key = "c:" + symbol
@@ -433,20 +400,13 @@ def consensus(symbol: str):
         return JSONResponse(hit, headers={"Cache-Control": "no-store"})
     payload: Dict[str, Any] = {}
     try:
-        payload.update(yh_dividends(symbol))
-    except Exception:
-        pass
-    try:
-        params = {"modules": "financialData,recommendationTrend,summaryDetail"}
-        cr = yh_crumb()
-        if cr:
-            params["crumb"] = cr
-        j = yh(f"/v10/finance/quoteSummary/{symbol}", params)
+        j = yh(f"/v10/finance/quoteSummary/{symbol}",
+               {"modules": "financialData,recommendationTrend"})
         res = (j.get("quoteSummary") or {}).get("result") or []
         if res:
             f = res[0].get("financialData") or {}
             tr = ((res[0].get("recommendationTrend") or {}).get("trend") or [{}])[0]
-            payload.update({
+            payload = {
                 "mean": (f.get("recommendationMean") or {}).get("raw"),
                 "key": f.get("recommendationKey"),
                 "target": (f.get("targetMeanPrice") or {}).get("raw"),
@@ -456,9 +416,9 @@ def consensus(symbol: str):
                 "buy": int(tr.get("strongBuy") or 0) + int(tr.get("buy") or 0),
                 "hold": int(tr.get("hold") or 0),
                 "sell": int(tr.get("sell") or 0) + int(tr.get("strongSell") or 0),
-            })
+            }
     except Exception:
-        pass
+        payload = {}
     cache_put(key, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
@@ -467,26 +427,26 @@ def consensus(symbol: str):
 ECB = "https://data-api.ecb.europa.eu/service/data/"
 RATES_TTL = 7200.0
 
+# flux BCE : (code, libelle, flowRef, cle, famille)
 ECB_SERIES = [
-    ("ESTR",       "STR a un jour",        "EST", "B.EU000A2X2A25.WT",                 "court"),
-    ("MRO",        "BCE refi principal",   "FM",  "D.U2.EUR.4F.KR.MRR_FR.LEV",         "court"),
-    ("DFR",        "BCE facilite de depot","FM",  "D.U2.EUR.4F.KR.DFR.LEV",            "court"),
-    ("EURIBOR1M",  "Euribor 1 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",   "court"),
-    ("EURIBOR3M",  "Euribor 3 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",   "court"),
-    ("EURIBOR6M",  "Euribor 6 mois",       "FM",  "M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",   "court"),
-    ("EURIBOR12M", "Euribor 12 mois",      "FM",  "M.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",   "court"),
-    ("EUR_AAA_1Y", "Courbe AAA 1 an",      "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y",   "courbe"),
-    ("EUR_AAA_2Y", "Courbe AAA 2 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y",   "courbe"),
-    ("EUR_AAA_5Y", "Courbe AAA 5 ans",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y",   "courbe"),
-    ("EUR_AAA_10Y","Courbe AAA 10 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y",  "courbe"),
-    ("EUR_AAA_30Y","Courbe AAA 30 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y",  "courbe"),
-    ("EUR_ALL_10Y","Toutes notations 10 ans","YC","B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y",  "courbe"),
-    ("FR_10Y",     "France 10 ans",        "IRS", "M.FR.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("ESTR",      "\u20acSTR",             "EST", "B.EU000A2X2A25.WT",                   "court"),
+    ("EURIBOR1M", "Euribor 1 mois",      "FM",  "D.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",     "court"),
+    ("EURIBOR3M", "Euribor 3 mois",      "FM",  "M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",     "court"),
+    ("EURIBOR6M", "Euribor 6 mois",      "FM",  "M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",     "court"),
+    ("EURIBOR12M","Euribor 12 mois",     "FM",  "M.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",     "court"),
+    ("EUR_AAA_1Y","Courbe AAA 1 an",     "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y",     "courbe"),
+    ("EUR_AAA_2Y","Courbe AAA 2 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y",     "courbe"),
+    ("EUR_AAA_5Y","Courbe AAA 5 ans",    "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y",     "courbe"),
+    ("EUR_AAA_10Y","Courbe AAA 10 ans",  "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y",    "courbe"),
+    ("EUR_AAA_30Y","Courbe AAA 30 ans",  "YC",  "B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y",    "courbe"),
+    ("EUR_ALL_10Y","Toutes notations 10 ans", "YC", "B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y", "courbe"),
+    ("FR_10Y",    "France 10 ans",       "IRS", "M.FR.L.L40.CI.0000.EUR.N.Z",          "souverain"),
     ("DE_10Y_M",   "Allemagne 10 ans",     "IRS", "M.DE.L.L40.CI.0000.EUR.N.Z",        "souverain"),
-    ("IT_10Y",     "Italie 10 ans",        "IRS", "M.IT.L.L40.CI.0000.EUR.N.Z",        "souverain"),
-    ("ES_10Y",     "Espagne 10 ans",       "IRS", "M.ES.L.L40.CI.0000.EUR.N.Z",        "souverain"),
+    ("IT_10Y",    "Italie 10 ans",       "IRS", "M.IT.L.L40.CI.0000.EUR.N.Z",          "souverain"),
+    ("ES_10Y",    "Espagne 10 ans",      "IRS", "M.ES.L.L40.CI.0000.EUR.N.Z",          "souverain"),
 ]
 
+# taux americains : cotes en continu chez Yahoo
 US_SERIES = [("US_3M", "Etats-Unis 3 mois", "^IRX", 0.25),
              ("US_5Y", "Etats-Unis 5 ans", "^FVX", 5.0),
              ("US_10Y", "Etats-Unis 10 ans", "^TNX", 10.0),
@@ -541,14 +501,15 @@ def _une_serie_bbk(spec):
 
 
 def ecb_series(flow: str, key: str, n: int = 420):
-    """Observations BCE, de la plus ancienne a la plus recente."""
-    r = S.get(ECB + flow + "/" + key,
-              params={"format": "csvdata", "detail": "dataonly", "lastNObservations": n},
-              timeout=20)
+    """Observations BCE, du plus ancien au plus recent, en (date, valeur)."""
+    url = ECB + flow + "/" + key
+    r = S.get(url, params={"format": "csvdata", "detail": "dataonly",
+                           "lastNObservations": n}, timeout=20)
     if r.status_code != 200 or not r.text:
         raise RuntimeError("BCE HTTP " + str(r.status_code))
+    rows = list(csv.DictReader(io.StringIO(r.text)))
     out = []
-    for row in csv.DictReader(io.StringIO(r.text)):
+    for row in rows:
         d, v = row.get("TIME_PERIOD"), _f(row.get("OBS_VALUE"))
         if d and v is not None:
             out.append((d, v))
@@ -567,7 +528,10 @@ def _delta(obs, jours):
         fin = _dt.date.fromisoformat(obs[-1][0][:10])
     except Exception:
         return None
-    cible = _dt.date(fin.year, 1, 1) if jours == "ytd" else fin - _dt.timedelta(days=jours)
+    if jours == "ytd":
+        cible = _dt.date(fin.year, 1, 1)
+    else:
+        cible = fin - _dt.timedelta(days=jours)
     ref = None
     for d, v in obs:
         try:
@@ -642,16 +606,38 @@ def rates():
 # ----------------------------------------------------------------- actualites
 NEWS_TTL = 900.0
 FLUX_MACRO = [
+    # presse de marche francophone, flux publics de syndication
+    ("Les Echos marches", "https://feeds.feedburner.com/lesechos/4MR4suAcqTl"),
+    ("Les Echos valeurs", "https://feeds.feedburner.com/lesechos/BrFLB6ZLde7"),
     ("Les Echos economie", "https://services.lesechos.fr/rss/les-echos-economie.xml"),
-    ("Les Echos monde", "https://services.lesechos.fr/rss/les-echos-monde.xml"),
-    ("Le Monde international", "https://www.lemonde.fr/international/rss_full.xml"),
+    ("Investing marches", "https://fr.investing.com/rss/market_overview.rss"),
+    ("Investing actions", "https://fr.investing.com/rss/news_25.rss"),
+    ("AGEFI marches actions", "https://www.agefi.fr/theme/marches-actions.rss"),
+    ("AGEFI marches obligataires", "https://www.agefi.fr/theme/marches-obligataires.rss"),
+    ("AGEFI economie marches", "https://www.agefi.fr/news/economie-marches.rss"),
+    ("ABC Bourse", "https://www.abcbourse.com/rss/displaynewsrss"),
+    ("BFM Bourse", "https://www.tradingsat.com/rssbourse.xml"),
+    ("Le Figaro Bourse", "https://www.lefigaro.fr/rss/figaro_bourse.xml"),
     ("Le Monde economie", "https://www.lemonde.fr/economie/rss_full.xml"),
-    ("France Info economie", "https://www.francetvinfo.fr/economie.rss"),
 ]
 _RE_ITEM = re.compile(r"<item[ >].*?</item>", re.S | re.I)
 _RE_TITRE = re.compile(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>", re.S | re.I)
 _RE_LIEN = re.compile(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", re.S | re.I)
 _RE_DATE = re.compile(r"<pubDate>(.*?)</pubDate>", re.S | re.I)
+_RE_BALISE = re.compile(r"<[^>]+>")
+_ENTITES = {"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"',
+            "&#39;": "'", "&apos;": "'", "&nbsp;": " ", "&#8217;": "\u2019"}
+
+
+_RE_NUM = re.compile(r"&#(x?)([0-9A-Fa-f]+);")
+
+
+def _detag(t: str) -> str:
+    t = _RE_BALISE.sub("", t or "")
+    t = _RE_NUM.sub(lambda m: chr(int(m.group(2), 16 if m.group(1) else 10)), t)
+    for k, v in _ENTITES.items():
+        t = t.replace(k, v)
+    return t.strip()
 
 
 def rss(nom, url, maxi=8):
@@ -680,19 +666,52 @@ def rss(nom, url, maxi=8):
     return out
 
 
-def yh_news(terme, maxi=6):
+_RE_SRC_GN = re.compile(r"<source[^>]*>(.*?)</source>", re.I | re.S)
+
+
+def _nettoie_titre_gn(t: str):
+    """Google Actualites colle le nom du media a la fin du titre, on le remet comme source."""
+    m = re.match(r"^(.*?)\s+-\s+([^-]{2,40})$", t)
+    if m:
+        return m.group(1).strip(), m.group(2).strip()
+    return t, ""
+
+
+def presse_valeur(terme, maxi=7):
+    """Actualite francaise d'une valeur, via le flux public de Google Actualites.
+
+    Ce flux agrege Les Echos, Boursorama, Zonebourse, Investing, Reuters France
+    et le reste de la presse economique francophone, avec un lien vers l'article
+    d'origine. C'est la seule voie ouverte pour ces titres, qui ne publient pas
+    tous un flux de syndication par valeur.
+    """
     out = []
+    requete = '"' + terme + '" (bourse OR action OR resultats OR marche)'
+    url = ("https://news.google.com/rss/search?q=" + requests.utils.quote(requete) +
+           "&hl=fr&gl=FR&ceid=FR:fr")
     try:
-        j = yh("/v1/finance/search",
-               {"q": terme, "quotesCount": 0, "newsCount": maxi,
-                "enableNavLinks": "false", "enableFuzzyQuery": "false"}, timeout=10.0)
-        for n in (j.get("news") or [])[:maxi]:
-            if not n.get("title") or not n.get("link"):
+        r = S.get(url, timeout=12)
+        if r.status_code != 200:
+            return out
+        for bloc in _RE_ITEM.findall(r.text)[:maxi]:
+            t = _RE_TITRE.search(bloc)
+            l = _RE_LIEN.search(bloc)
+            d = _RE_DATE.search(bloc)
+            if not t or not l:
                 continue
-            out.append({"titre": n["title"], "lien": n["link"],
-                        "src": n.get("publisher") or "Yahoo Finance",
-                        "t": int(n["providerPublishTime"] * 1000) if n.get("providerPublishTime") else None,
-                        "cat": "titre", "tags": [terme] + list(n.get("relatedTickers") or [])[:3]})
+            titre, media = _nettoie_titre_gn(_detag(t.group(1).strip()))
+            sm = _RE_SRC_GN.search(bloc)
+            if sm:
+                media = _detag(sm.group(1)).strip() or media
+            ts = None
+            if d:
+                try:
+                    from email.utils import parsedate_to_datetime
+                    ts = int(parsedate_to_datetime(d.group(1).strip()).timestamp() * 1000)
+                except Exception:
+                    ts = None
+            out.append({"titre": titre, "lien": l.group(1).strip(),
+                        "src": media or "Presse", "t": ts, "cat": "titre", "tags": [terme]})
     except Exception:
         pass
     return out
@@ -712,7 +731,7 @@ def news(q: str = "", macro: int = 1):
                 for lot in pool.map(lambda f: rss(f[0], f[1]), FLUX_MACRO):
                     items.extend(lot)
             if termes:
-                for lot in pool.map(yh_news, termes):
+                for lot in pool.map(presse_valeur, termes):
                     items.extend(lot)
     except Exception:
         pass
@@ -727,6 +746,218 @@ def news(q: str = "", macro: int = 1):
     if net:
         cache_put(cle, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
+# =====================================================================
+#  CDS 5 ans, prix de reglement quotidiens publies par ICE Clear Credit
+# =====================================================================
+#  ICE met gratuitement a disposition les prix de reglement de fin de
+#  journee des contrats mono-emetteur a cinq ans. Le prix est exprime en
+#  pourcentage du nominal pour un coupon courant de 100 points de base :
+#  un prix au-dessus de 100 signifie un spread inferieur au coupon.
+#  On repasse du prix au spread par un modele a intensite constante,
+#  recuperation 40 pour cent, ce qui est la convention de place.
+
+ICE_URL = "https://www.ice.com/api/cds-settlement-prices/icc-single-names"
+CDS_TTL = 6 * 3600.0
+RECUP = 0.40
+_RE_INSTR = re.compile(
+    r"^([A-Za-z0-9\-_]+)\.([A-Z]+)\.([A-Z]{3})\.([A-Z0-9]+)\.([0-9.]+)\.(\d{4}-\d{2}-\d{2})$")
+
+SUFFIXES = ("plc", "inc", "corp", "corporation", "co", "company", "sa", "s a", "se", "nv",
+            "ag", "ab", "asa", "spa", "s p a", "ltd", "limited", "lp", "llc", "holding",
+            "holdings", "group", "groupe", "the", "intl", "international", "sas", "oyj",
+            "bv", "gmbh", "kgaa", "cie", "and", "&",
+            "de", "du", "des", "la", "le", "les", "et", "compagnie", "generale",
+            "etablissements", "societe", "sca", "spa", "aktiengesellschaft")
+_RE_MOT = re.compile(r"[a-z0-9]+")
+
+
+def _cle_emetteur(nom: str) -> str:
+    """Nom d'emetteur ramene a ses mots porteurs, pour un rapprochement sobre."""
+    t = (nom or "").lower()
+    t = (t.replace("\u00e9", "e").replace("\u00e8", "e").replace("\u00ea", "e")
+          .replace("\u00e0", "a").replace("\u00e2", "a").replace("\u00fb", "u")
+          .replace("\u00f4", "o").replace("\u00ee", "i").replace("\u00e7", "c"))
+    mots = [m for m in _RE_MOT.findall(t) if m not in SUFFIXES and len(m) > 1]
+    # abreviations frequentes d'ICE
+    corr = {"amern": "american", "intl": "international", "fin": "finance",
+            "svcs": "services", "grp": "group", "natl": "national", "bk": "bank",
+            "elec": "electric", "tele": "telecom", "comms": "communications"}
+    return " ".join(corr.get(m, m) for m in mots)
+
+
+def _annuite(lam: float, r: float, T: float) -> float:
+    k = lam + r
+    return T if k <= 1e-9 else (1.0 - pow(2.718281828459045, -k * T)) / k
+
+
+def spread_depuis_prix(prix: float, coupon_bp: float, T: float, r: float = 0.03):
+    """Spread par, en points de base, par dichotomie sur l'intensite de defaut."""
+    try:
+        upfront = (100.0 - float(prix)) / 100.0
+        c = float(coupon_bp) / 10000.0
+    except Exception:
+        return None
+    bas, haut = 0.0, 5.0
+    for _ in range(80):
+        lam = (bas + haut) / 2.0
+        a = _annuite(lam, r, T)
+        val = ((1.0 - RECUP) * lam - c) * a
+        if val < upfront:
+            bas = lam
+        else:
+            haut = lam
+    lam = (bas + haut) / 2.0
+    if lam <= 0 or lam >= 4.99:
+        return None
+    return round((1.0 - RECUP) * lam * 10000.0, 1)
+
+
+def charger_cds():
+    hit = cache_get("cds", CDS_TTL)
+    if hit:
+        return hit
+    lignes, asof = {}, None
+    try:
+        r = S.get(ICE_URL, timeout=20)
+        brut = r.json() if r.status_code == 200 else []
+    except Exception:
+        brut = []
+    aujourd = time.time()
+    for o in brut if isinstance(brut, list) else []:
+        nom = (o.get("name") or "").strip()
+        instr = (o.get("instrumentName") or "").strip()
+        prix = o.get("eodPrice")
+        m = _RE_INSTR.match(instr)
+        if not nom or not m or prix in (None, ""):
+            continue
+        tic, tier, dev, doc, coupon, ech = m.groups()
+        if tier != "SNRFOR":
+            continue
+        try:
+            y, mo, d = [int(x) for x in ech.split("-")]
+            import datetime as _dt
+            ans = (_dt.date(y, mo, d) - _dt.date.fromtimestamp(aujourd)).days / 365.25
+        except Exception:
+            continue
+        if not (4.0 <= ans <= 6.0):      # on ne garde que le point cinq ans
+            continue
+        sp = spread_depuis_prix(prix, coupon, ans)
+        if sp is None or sp <= 0 or sp > 5000:
+            continue
+        asof = asof or o.get("clearingDate")
+        cle = _cle_emetteur(nom)
+        prec = lignes.get(cle)
+        # une devise par emetteur suffit, on privilegie l'euro puis le dollar
+        rang = 0 if dev == "EUR" else (1 if dev == "USD" else 2)
+        if not prec or rang < prec["rang"]:
+            lignes[cle] = {"nom": nom, "ticker": tic, "dev": dev, "doc": doc,
+                           "spread": sp, "ans": round(ans, 2), "rang": rang}
+    for v in lignes.values():
+        v.pop("rang", None)
+    payload = {"asof": asof, "n": len(lignes), "source": "ICE Clear Credit",
+               "emetteurs": lignes}
+    if lignes:
+        cache_put("cds", payload)
+    return payload
+
+
+# quelques noms d'usage que la denomination legale d'ICE ne laisse pas deviner
+ALIAS_CDS = {
+    "lvmh": "lvmh moet hennessy louis vuitton",
+    "hermes": "hermes international",
+    "schneider": "schneider electric",
+    "stellantis": "stellantis nv",
+    "arcelormittal": "arcelormittal",
+    "airbus": "airbus",
+    "safran": "safran",
+    "publicis": "publicis groupe",
+    "vinci": "vinci",
+    "bouygues": "bouygues",
+    "orange": "orange",
+    "engie": "engie",
+    "veolia": "veolia environnement",
+    "danone": "danone",
+    "carrefour": "carrefour",
+    "accor": "accor",
+    "michelin": "michelin",
+    "generale": "societe generale",
+    "credit agricole": "credit agricole",
+    "axa": "axa",
+    "sanofi": "sanofi",
+    "total": "totalenergies",
+    "totalenergies": "totalenergies",
+}
+
+
+def rapprocher(nom: str, table: dict):
+    """Rapproche un intitule du terminal d'une entite de reference ICE.
+
+    Les noms d'usage sont courts (LVMH), les denominations ICE sont longues
+    (LVMH Moet Hennessy Louis Vuitton SE). On accepte donc l'inclusion dans
+    un sens comme dans l'autre, a condition qu'elle ne designe qu'un seul
+    emetteur : une correspondance ambigue vaut mieux vide que fausse.
+    """
+    cle = _cle_emetteur(nom)
+    if not cle:
+        return None
+    cle = ALIAS_CDS.get(cle, cle)
+    if cle in table:
+        return table[cle]
+    mots = set(cle.split())
+    if not mots or (len(mots) == 1 and len(cle) < 4):
+        return None
+
+    def unique(cands):
+        if not cands:
+            return None
+        mini = min(c[0] for c in cands)
+        tetes = [c[1] for c in cands if c[0] == mini]
+        return tetes[0] if len(tetes) == 1 else None
+
+    # le nom du terminal est contenu dans la denomination ICE
+    inclus = [(len(set(k.split()) - mots), v) for k, v in table.items()
+              if mots <= set(k.split())]
+    r = unique(inclus)
+    if r:
+        return r
+    # l'inclusion inverse n'est pas acceptee : "Anglo American Platinum" contient
+    # "Anglo American" sans etre le meme emetteur, et une signature fausse est
+    # pire qu'une case vide
+    # a defaut, recouvrement large
+    meilleur, score = None, 0.0
+    for k, v in table.items():
+        km = set(k.split())
+        if not km:
+            continue
+        inter = len(mots & km)
+        if inter < 2:
+            continue
+        sc = inter / float(len(mots | km))
+        if sc > score:
+            meilleur, score = v, sc
+    # seuil volontairement haut : "Anglo American Platinum" recoupe
+    # "Anglo American" aux deux tiers sans etre le meme emetteur
+    return meilleur if score >= 0.75 else None
+
+
+@app.get("/api/cds")
+def cds(q: str = ""):
+    """Spreads 5 ans. Sans parametre, toute la table. Avec q, les noms demandes."""
+    d = charger_cds()
+    if not q:
+        return JSONResponse(d, headers={"Cache-Control": "no-store"})
+    noms = [x.strip() for x in q.split("|") if x.strip()][:200]
+    table = d.get("emetteurs") or {}
+    sortie = {}
+    for n in noms:
+        trouve = rapprocher(n, table)
+        if trouve:
+            sortie[n] = {"spread": trouve["spread"], "emetteur": trouve["nom"],
+                         "dev": trouve["dev"], "ans": trouve["ans"]}
+    return JSONResponse({"asof": d.get("asof"), "n": d.get("n"), "source": d.get("source"),
+                         "trouves": sortie}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/diag")
@@ -769,10 +1000,6 @@ def diag():
     except Exception as exc:
         report["yahoo_raw_status"] = f"{type(exc).__name__}"
     try:
-        report["page"] = os.path.basename(page_path())
-    except Exception as exc:
-        report["page"] = str(exc)[:60]
-    try:
         report["crumb"] = bool(yh_crumb())
     except Exception as exc:
         report["crumb"] = str(exc)[:80]
@@ -781,8 +1008,8 @@ def diag():
     except Exception as exc:
         report["dividendes"] = str(exc)[:120]
     try:
-        _c, _r = _une_serie_ecb(ECB_SERIES[2])
-        report["bce"] = _r
+        code, rec = _une_serie_ecb(ECB_SERIES[2])
+        report["bce"] = rec
     except Exception as exc:
         report["bce"] = str(exc)[:120]
     return JSONResponse(report, headers={"Cache-Control": "no-store"})
@@ -815,8 +1042,8 @@ MANIFEST_JSON = {
 }
 
 SW_JS = """
-const CACHE = "artemis-ia-v5";
-const SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "artemis-ia-v6";
+const SHELL = ["/manifest.webmanifest", "/icon.svg"];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -831,14 +1058,11 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname === "/health") return;
-  if (req.mode === "navigate") {
-    e.respondWith(fetch(req).then((r) => {
-      const copy = r.clone();
-      caches.open(CACHE).then((c) => c.put("/", copy));
-      return r;
-    }).catch(() => caches.match("/").then((r) => r || Response.error())));
-    return;
-  }
+  // la page porte le nom et la configuration de la personne connectee,
+  // elle n'est jamais mise en cache : chaque ouverture repart du serveur
+  if (req.mode === "navigate" || url.pathname === "/" || url.pathname === "/terminal"
+      || url.pathname.startsWith("/auth/") || url.pathname.startsWith("/admin/")
+      || url.pathname.startsWith("/cfg")) return;
   e.respondWith(caches.match(req).then((hit) => hit || fetch(req)));
 });
 """
@@ -863,8 +1087,9 @@ PWA_TAIL = (
 
 def page_html() -> str:
     """Sert la page en corrigeant au vol ce qui doit l'etre, sans dependre du fichier depose."""
-    with open(page_path(), "r", encoding="utf-8") as fh:
+    with open(PAGE, "r", encoding="utf-8") as fh:
         html = fh.read()
+    # la page abandonnait au bout de 12 s, trop court pour un onglet de 167 sous-jacents
     html = html.replace(",12000)", ",60000)")
     html = html.replace(",25000)", ",60000)")
     if "manifest.webmanifest" not in html:
@@ -890,12 +1115,205 @@ def service_worker():
                     headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"})
 
 
+# =====================================================================
+#  Comptes : demande d'acces, connexion, administration, configurations
+# =====================================================================
+
+def _pose_cookie(reponse: Response, jeton: str, secure: bool) -> None:
+    reponse.set_cookie(
+        comptes.COOKIE, jeton, max_age=comptes.DUREE_SESSION, httponly=True,
+        samesite="lax", secure=secure, path="/",
+    )
+
+
+def _ip(request: Request) -> str:
+    h = request.headers.get("x-forwarded-for")
+    if h:
+        return h.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+@app.post("/auth/demande")
+async def auth_demande(request: Request):
+    cle = "demande:" + _ip(request)
+    if comptes.trop_de_tentatives(cle, maxi=5, fenetre=3600):
+        return JSONResponse({"ok": False, "erreur": "Trop de demandes depuis ce poste. Reessayez plus tard."},
+                            status_code=429)
+    comptes.noter_tentative(cle)
+    try:
+        corps = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "erreur": "Requete illisible."}, status_code=400)
+    r = comptes.creer_demande(corps if isinstance(corps, dict) else {})
+    return JSONResponse(r, status_code=200 if r.get("ok") else 400)
+
+
+@app.post("/auth/connexion")
+async def auth_connexion(request: Request):
+    cle = "co:" + _ip(request)
+    if comptes.trop_de_tentatives(cle):
+        return JSONResponse({"ok": False, "erreur": "Trop d'essais. Patientez dix minutes."}, status_code=429)
+    try:
+        corps = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "erreur": "Requete illisible."}, status_code=400)
+    r = comptes.connecter(corps.get("email", ""), corps.get("mdp", ""))
+    if not r.get("ok"):
+        comptes.noter_tentative(cle)
+        return JSONResponse({"ok": False, "erreur": r.get("erreur")}, status_code=401)
+    rep = JSONResponse({"ok": True, "moi": r["moi"]})
+    _pose_cookie(rep, r["jeton"], request.url.scheme == "https")
+    return rep
+
+
+@app.post("/auth/deconnexion")
+async def auth_deconnexion(request: Request):
+    comptes.fermer_session(request.cookies.get(comptes.COOKIE) or "")
+    rep = JSONResponse({"ok": True})
+    rep.delete_cookie(comptes.COOKIE, path="/")
+    return rep
+
+
+@app.get("/auth/moi")
+async def auth_moi(request: Request):
+    if _ouvert():
+        return {"ok": True, "ouvert": True,
+                "moi": {"email": "", "nom": "", "prenom": "", "role": "admin", "statut": "actif"}}
+    u = _moi(request)
+    if not u:
+        return JSONResponse({"ok": False}, status_code=401)
+    sortie = {"ok": True, "ouvert": False, "moi": comptes.public(u)}
+    if u["role"] == "admin":
+        sortie["attente"] = comptes.en_attente()
+    return sortie
+
+
+@app.post("/auth/motdepasse")
+async def auth_motdepasse(request: Request):
+    u = _moi(request)
+    if not u:
+        return JSONResponse({"ok": False, "erreur": "Session expiree."}, status_code=401)
+    corps = await request.json()
+    r = comptes.changer_mdp(u["email"], corps.get("ancien", ""), corps.get("nouveau", ""))
+    return JSONResponse(r, status_code=200 if r.get("ok") else 400)
+
+
+@app.get("/admin/comptes")
+async def admin_comptes(request: Request):
+    return {"ok": True, "comptes": comptes.liste(), "attente": comptes.en_attente(),
+            "etat": comptes.etat()}
+
+
+@app.post("/admin/decision")
+async def admin_decision(request: Request):
+    u = getattr(request.state, "moi", None) or _moi(request)
+    corps = await request.json()
+    r = comptes.decider(corps.get("email", ""), corps.get("action", ""),
+                        source_config=u["email"] if u else None)
+    if r.get("ok"):
+        r["comptes"] = comptes.liste()
+        r["attente"] = comptes.en_attente()
+    return JSONResponse(r, status_code=200 if r.get("ok") else 400)
+
+
+@app.post("/admin/reinitialiser")
+async def admin_reinitialiser(request: Request):
+    """L'administrateur fixe lui-meme un nouveau mot de passe pour un collaborateur."""
+    corps = await request.json()
+    email = (corps.get("email") or "").strip().lower()
+    nouveau = corps.get("nouveau") or ""
+    souci = comptes.souci_mdp(nouveau)
+    if souci:
+        return JSONResponse({"ok": False, "erreur": souci}, status_code=400)
+    sel, emp = comptes.hacher(nouveau)
+    with comptes._verrou:
+        c = comptes.cx()
+        if not c.execute("SELECT email FROM utilisateurs WHERE email=?", (email,)).fetchone():
+            return JSONResponse({"ok": False, "erreur": "Compte introuvable."}, status_code=400)
+        c.execute("UPDATE utilisateurs SET empreinte=?, sel=? WHERE email=?", (emp, sel, email))
+        c.commit()
+    comptes.fermer_toutes(email)
+    return {"ok": True}
+
+
+@app.get("/cfg")
+async def cfg_lire(request: Request):
+    u = _moi(request)
+    if not u:
+        return JSONResponse({"ok": False}, status_code=401)
+    return {"ok": True, "cfg": comptes.lire_config(u["email"])}
+
+
+@app.post("/cfg")
+async def cfg_ecrire(request: Request):
+    u = _moi(request)
+    if not u:
+        return JSONResponse({"ok": False}, status_code=401)
+    try:
+        corps = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "erreur": "Requete illisible."}, status_code=400)
+    r = comptes.ecrire_config(u["email"], corps.get("cfg"))
+    return JSONResponse(r, status_code=200 if r.get("ok") else 400)
+
+
+@app.get("/accueil")
+def accueil_page():
+    return HTMLResponse(ACCUEIL)
+
+
+def _page_ou_message(request: Request = None):
+    if not os.path.exists(PAGE):
+        return JSONResponse({"ok": True, "msg": "Poser ARTEMIS_IA_TERMINAL.html a cote de main.py."})
+    html = page_html()
+    graine = {"ouvert": _ouvert(), "moi": None, "cfg": None, "attente": 0}
+    u = _moi(request) if request is not None else None
+    if u:
+        graine["moi"] = comptes.public(u)
+        graine["cfg"] = comptes.lire_config(u["email"])
+        if u["role"] == "admin":
+            graine["attente"] = comptes.en_attente()
+    bloc = ("<script>window.__ARTX=" +
+            json.dumps(graine, ensure_ascii=False).replace("</", "<\\/") + ";</script>")
+    html = html.replace("</head>", bloc + "</head>", 1)
+    return HTMLResponse(html)
+
+
 @app.get("/")
-def index():
-    if os.path.exists(page_path()):
-        return HTMLResponse(page_html())
-    return JSONResponse({"ok": True, "msg": "Poser ARTEMIS_IA_TERMINAL.html a cote de main.py."})
+def index(request: Request):
+    return _page_ou_message(request)
+
+
+@app.get("/terminal")
+def terminal(request: Request):
+    return _page_ou_message(request)
 
 @app.get("/health")
 def health():
     return {"ok": True, "ts": int(time.time() * 1000)}
+
+
+STATIC = {
+    "manifest.webmanifest": "application/manifest+json",
+    "sw.js": "application/javascript",
+    "icon-192.png": "image/png",
+    "icon-512.png": "image/png",
+    "icon-maskable-512.png": "image/png",
+    "apple-touch-icon.png": "image/png",
+    "favicon.ico": "image/x-icon",
+}
+
+
+@app.get("/{asset}")
+def static_asset(asset: str):
+    """Sert le manifeste, le service worker et les icones de l'application."""
+    media = STATIC.get(asset)
+    if not media:
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    path = os.path.join(HERE, asset)
+    if not os.path.exists(path):
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    headers = {"Service-Worker-Allowed": "/"} if asset == "sw.js" else {}
+    if asset == "sw.js":
+        headers["Cache-Control"] = "no-cache"
+    return FileResponse(path, media_type=media, headers=headers)
