@@ -32,23 +32,40 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-import comptes
-from accueil import ACCUEIL
+# La couche comptes est facultative : si comptes.py ou accueil.py ne sont pas
+# deposes a cote de main.py, le terminal doit rester en acces libre plutot que
+# de refuser de demarrer.
+try:
+    import comptes
+    from accueil import ACCUEIL
+    COMPTES_DISPO = True
+except Exception as _e:          # pragma: no cover
+    comptes = None
+    ACCUEIL = ""
+    COMPTES_DISPO = False
+    MOTIF_COMPTES = str(_e)
+else:
+    MOTIF_COMPTES = ""
 
 app = FastAPI(title="Artemis IA Terminal API", version="9.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
 )
 
-comptes.init()
+if COMPTES_DISPO:
+    comptes.init()
 
 
 def _ouvert() -> bool:
-    """Sans compte administrateur configure, le terminal reste accessible comme avant."""
+    """Sans module de comptes ou sans administrateur configure, acces libre."""
+    if not COMPTES_DISPO:
+        return True
     return not bool(os.environ.get("ADMIN_EMAIL") and os.environ.get("ADMIN_PASSWORD"))
 
 
 def _moi(request: Request):
+    if not COMPTES_DISPO:
+        return None
     return comptes.utilisateur_du_jeton(request.cookies.get(comptes.COOKIE))
 
 
@@ -58,6 +75,12 @@ LIBRES = ("/health", "/auth/", "/manifest.webmanifest", "/icon.svg", "/sw.js", "
 @app.middleware("http")
 async def verrou(request: Request, call_next):
     chemin = request.url.path
+    if not COMPTES_DISPO and (chemin.startswith("/auth/") or chemin.startswith("/admin/")
+                              or chemin.startswith("/cfg")):
+        return JSONResponse(
+            {"ok": False, "erreur": "Gestion des comptes indisponible : deposer comptes.py "
+                                    "et accueil.py a cote de main.py.", "motif": MOTIF_COMPTES},
+            status_code=503)
     if _ouvert() or chemin.startswith(LIBRES):
         return await call_next(request)
     if chemin in ("/", "/terminal") or chemin.startswith("/api/") \
@@ -960,10 +983,163 @@ def cds(q: str = ""):
                          "trouves": sortie}, headers={"Cache-Control": "no-store"})
 
 
+# =====================================================================
+#  Calendrier : decisions de banque centrale et publications de resultats
+# =====================================================================
+#  Les dates de reunion sont celles publiees par les banques centrales
+#  elles-memes. Elles sont figees ici car aucune de ces institutions ne
+#  publie de flux exploitable, et elles sont connues plus d'un an a
+#  l'avance. Les dates 2027 de la Fed restent indicatives jusqu'a leur
+#  confirmation a la reunion precedente, ce que l'affichage signale.
+
+REUNIONS = [
+    ("2026-10-29", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2026-10-30", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
+    ("2026-11-05", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2026-12-09", "Fed", "FOMC, decision et projections economiques", ""),
+    ("2026-12-17", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2026-12-17", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2026-12-18", "BoJ", "Reunion de politique monetaire", ""),
+    ("2027-01-22", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
+    ("2027-01-27", "Fed", "FOMC, decision", "indicatif"),
+    ("2027-02-04", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-02-04", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-03-17", "Fed", "FOMC, decision et projections economiques", "indicatif"),
+    ("2027-03-18", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-03-18", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-03-18", "BoJ", "Reunion de politique monetaire", ""),
+    ("2027-04-28", "Fed", "FOMC, decision", "indicatif"),
+    ("2027-04-28", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
+    ("2027-04-29", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-04-29", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-06-09", "Fed", "FOMC, decision et projections economiques", "indicatif"),
+    ("2027-06-10", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-06-11", "BoJ", "Reunion de politique monetaire", ""),
+    ("2027-06-17", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-07-22", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-07-22", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
+    ("2027-07-28", "Fed", "FOMC, decision", "indicatif"),
+    ("2027-07-29", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-09-09", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-09-15", "Fed", "FOMC, decision et projections economiques", "indicatif"),
+    ("2027-09-16", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-09-22", "BoJ", "Reunion de politique monetaire", ""),
+    ("2027-10-27", "Fed", "FOMC, decision", "indicatif"),
+    ("2027-10-28", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-10-29", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
+    ("2027-11-04", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-12-08", "Fed", "FOMC, decision et projections economiques", "indicatif"),
+    ("2027-12-16", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
+    ("2027-12-16", "BoE", "Comite de politique monetaire, decision", ""),
+    ("2027-12-17", "BoJ", "Reunion de politique monetaire", ""),
+]
+
+RES_TTL = 12 * 3600.0
+
+def yh_resultats(sym: str):
+    """Dates de publication de resultats connues de Yahoo pour un symbole.
+
+    Si Yahoo ne renvoie rien, on ne fabrique aucune date : l'absence est
+    signalee telle quelle plutot que devinee.
+    """
+    cle = "res:" + sym
+    hit = cache_get(cle, RES_TTL)
+    if hit is not None:
+        return hit
+    sorties = []
+    try:
+        j = yh("/v8/finance/chart/" + sym,
+               {"range": "2y", "interval": "1d", "events": "earn,div,split"}, timeout=12.0)
+        res = (((j.get("chart") or {}).get("result") or [{}])[0])
+        ev = (res.get("events") or {})
+        bloc = ev.get("earnings") or ev.get("earning") or {}
+        for v in (bloc.values() if isinstance(bloc, dict) else bloc):
+            if not isinstance(v, dict):
+                continue
+            ts = v.get("date") or v.get("earningsDate")
+            if not ts:
+                continue
+            sorties.append({"ts": int(ts) * 1000,
+                            "eps": v.get("epsActual"), "est": v.get("epsEstimate")})
+    except Exception:
+        pass
+    sorties.sort(key=lambda x: x["ts"])
+    cache_put(cle, sorties)
+    return sorties
+
+
+@app.get("/api/calendrier")
+def calendrier(syms: str = "", noms: str = "", jours: int = 90, passe: int = 7):
+    """Agenda des banques centrales et des publications de resultats."""
+    import datetime as _dt
+    auj = _dt.date.today()
+    debut = auj - _dt.timedelta(days=max(0, min(passe, 60)))
+    fin = auj + _dt.timedelta(days=max(1, min(jours, 540)))
+
+    evenements = []
+    for iso, inst, lib, rem in REUNIONS:
+        try:
+            d = _dt.date(*[int(x) for x in iso.split("-")])
+        except Exception:
+            continue
+        if debut <= d <= fin:
+            evenements.append({"date": iso, "type": "bc", "inst": inst,
+                               "libelle": lib, "note": rem, "sym": "", "nom": ""})
+
+    listeS = [x.strip() for x in syms.split(",") if x.strip()][:200]
+    listeN = [x.strip() for x in noms.split("|")][:200]
+    trouves, vides = 0, 0
+    if listeS:
+        def _une(i):
+            sym = listeS[i]
+            nom = listeN[i] if i < len(listeN) and listeN[i] else sym
+            return sym, nom, yh_resultats(sym)
+        try:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                paquets = list(pool.map(_une, range(len(listeS))))
+        except Exception:
+            paquets = []
+        for sym, nom, dates in paquets:
+            if not dates:
+                vides += 1
+                continue
+            trouves += 1
+            for e in dates:
+                d = _dt.date.fromtimestamp(e["ts"] / 1000.0)
+                if not (debut <= d <= fin):
+                    continue
+                evenements.append({
+                    "date": d.isoformat(), "type": "res", "inst": "",
+                    "libelle": "Publication de resultats", "note": "",
+                    "sym": sym, "nom": nom, "ts": e["ts"],
+                    "eps": e.get("eps"), "est": e.get("est")})
+
+    evenements.sort(key=lambda x: (x["date"], x["type"], x.get("nom") or x.get("inst") or ""))
+    return JSONResponse({
+        "asof": int(time.time() * 1000),
+        "debut": debut.isoformat(), "fin": fin.isoformat(),
+        "evenements": evenements,
+        "resultats_disponibles": trouves,
+        "resultats_muets": vides,
+    }, headers={"Cache-Control": "no-store"})
+
+
+
 @app.get("/api/diag")
 def diag():
     """Indique quelle source repond depuis cet hebergeur."""
     report: Dict[str, Any] = {"host": os.environ.get("RENDER_EXTERNAL_URL", "local")}
+    try:
+        ech = {sym: yh_resultats(sym) for sym in ("AAPL", "MC.PA", "TTE.PA")}
+        report["resultats"] = {k: {"n": len(v), "prochaine": (v[-1]["ts"] if v else None)}
+                               for k, v in ech.items()}
+    except Exception as exc:
+        report["resultats"] = {"err": str(exc)[:160]}
+    try:
+        d = charger_cds()
+        report["cds"] = {"n": d.get("n"), "asof": d.get("asof")}
+    except Exception as exc:
+        report["cds"] = {"err": str(exc)[:160]}
     try:
         q = yh_spark(["AAPL", "MC.PA", "^FCHI"])
         report["yahoo_spark"] = {"ok": bool(q), "n": len(q),
