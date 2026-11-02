@@ -62,11 +62,46 @@ button,input,select{font:inherit;color:inherit}
 .pl.on{color:var(--fg)}
 .pl.pre i{background:var(--amber)}
 #ping{flex:0 0 auto}
-.rhact{display:flex;gap:6px;margin-top:8px}
+.rhact{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.rhact select{max-width:140px}
+/* ---------- F9 : credit ---------- */
+.crwrap{padding:10px 12px}
+.crpan{background:var(--panel);border:1px solid var(--grid);border-radius:3px;padding:12px 14px;margin-bottom:12px}
+.crpan h4{font-family:var(--f-cond);font-size:14px;letter-spacing:.1em;color:var(--amber);
+  margin:0 0 10px;text-transform:uppercase}
+.crbar{display:grid;grid-template-columns:minmax(120px,210px) minmax(0,1fr) 62px 74px;gap:9px;
+  align-items:center;font-size:11.5px;padding:2px 0;cursor:pointer}
+.crbar:hover{background:#0e1215}
+.crbar .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber-soft)}
+.crbar .tr{position:relative;height:13px;background:#0c1013;border:1px solid var(--grid);border-radius:2px;overflow:hidden}
+.crbar .tr i{position:absolute;left:0;top:0;bottom:0;display:block}
+.crbar .sp{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg)}
+.crbar .pd{text-align:right;font-variant-numeric:tabular-nums;color:var(--fg-dim);font-size:10.5px}
+.crlg{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:var(--fg-dim);margin-top:8px}
+.crlg b{font-weight:500}
+.crnu{position:relative;height:300px;border:1px solid var(--grid);border-radius:2px;background:#07090b}
+.crnu canvas{display:block;width:100%;height:100%}
+.crkpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;margin-bottom:12px}
+.crkpi .k{background:var(--panel2);border:1px solid var(--grid);border-radius:3px;padding:9px 11px}
+.crkpi .k span{display:block;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-dim)}
+.crkpi .k b{display:block;font-family:var(--f-cond);font-size:21px;font-weight:600;color:var(--amber);margin-top:3px}
+.crkpi .k i{display:block;font-style:normal;font-size:10.5px;color:var(--fg-dim);margin-top:2px}
 .nwfiltre{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .nwfiltre .puce{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--amber-dim);
   color:var(--amber);border-radius:2px;padding:2px 8px;font-size:10.5px;letter-spacing:.06em}
 .nwfiltre .puce button{background:none;border:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 2px}
+.nwfil{display:flex;gap:7px;flex-wrap:wrap;align-items:center;padding:8px 12px;
+  border-bottom:1px solid var(--grid);background:#0b0906}
+.nwfil input,.nwfil select{background:#05070a;border:1px solid var(--grid2);color:var(--fg);
+  padding:4px 8px;border-radius:2px;font:inherit;font-size:11.5px}
+.nwfil input{min-width:230px;flex:1 1 230px}
+.nwgrp{margin:0 0 12px}
+.nwgrp h4{display:flex;align-items:baseline;gap:10px;margin:0;padding:7px 12px;
+  background:var(--panel2);border-bottom:1px solid var(--grid);cursor:pointer;
+  font-family:var(--f-cond);font-size:13px;letter-spacing:.09em;color:var(--amber);text-transform:uppercase}
+.nwgrp h4:hover{background:#15110a}
+.nwgrp h4 span{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.04em;color:var(--fg-dim);text-transform:none}
+.nwgrp h4 .px{font-variant-numeric:tabular-nums;color:var(--fg)}
 .moi{flex:0 0 auto;font-size:10.5px;letter-spacing:.06em;color:var(--amber-soft);white-space:nowrap;text-transform:uppercase}
 #deco{flex:0 0 auto}
 .pastille{display:inline-block;margin-left:6px;min-width:15px;height:15px;line-height:15px;padding:0 4px;
@@ -193,7 +228,7 @@ td.spk-td{padding:0 6px;width:80px}
 /* risque, barrieres, ajout de titres, matrice de performance */
 .barr-head{display:flex;gap:6px;align-items:center;margin-bottom:7px;flex-wrap:wrap}
 .barr-head label{color:var(--fg-dim);font-size:10.5px;letter-spacing:.06em}
-.barr-head input{width:104px;flex:0 0 auto}
+.barr-head input,.barr-head select{width:104px;flex:0 0 auto}
 table.barr{width:100%;border-collapse:collapse;font-size:11.5px}
 table.barr th{text-align:right;color:var(--cyan);font-family:var(--f-cond);font-size:11px;
   letter-spacing:.1em;padding:2px 5px;border-bottom:1px solid var(--grid)}
@@ -201,6 +236,11 @@ table.barr th:first-child{text-align:left}
 table.barr td{padding:2px 5px;text-align:right;border-bottom:1px solid #101416}
 table.barr td:first-child{text-align:left;color:var(--amber-soft)}
 table.barr tr.touche td{background:#2a0f0d}
+table.barr tbody{display:block;max-height:220px;overflow-y:auto}
+table.barr thead,table.barr tbody tr,table.barr tfoot tr{display:table;width:100%;table-layout:fixed}
+table.barr tbody tr.cliq{cursor:pointer}
+table.barr tbody tr.cliq:hover td{background:#15110a}
+table.barr tfoot td{padding:3px 5px;border-top:1px solid var(--grid);font-size:10.5px}
 .addbox{flex:0 0 auto;background:var(--panel2);border:1px solid var(--amber-dim);border-radius:2px;
   padding:9px 11px;display:grid;gap:7px;margin:8px 0}
 .addbox .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -451,7 +491,8 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
     <button class="fk" type="button" data-view="news" aria-pressed="false"><kbd>F6</kbd>NEWS</button>
     <button class="fk" type="button" data-view="scan" aria-pressed="false"><kbd>F7</kbd>SCANNER</button>
     <button class="fk" type="button" data-view="cal" aria-pressed="false"><kbd>F8</kbd>CALENDRIER</button>
-    <button class="fk" type="button" data-view="admin" id="bt-admin" aria-pressed="false" hidden><kbd>F9</kbd>ADMIN<span class="pastille" id="pastille" hidden></span></button>
+    <button class="fk" type="button" data-view="credit" aria-pressed="false"><kbd>F9</kbd>CREDIT</button>
+    <button class="fk" type="button" data-view="admin" id="bt-admin" aria-pressed="false" hidden><kbd>F10</kbd>ADMIN<span class="pastille" id="pastille" hidden></span></button>
   </div>
   <div class="cmd-sep"></div>
   <label class="led" for="hmw">BASE
@@ -509,6 +550,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       <div id="newsview" hidden></div>
       <div id="scanview" hidden></div>
       <div id="calview" hidden></div>
+      <div id="creditview" hidden></div>
       <div id="adminview" hidden></div>
     </div>
   </div>
@@ -519,7 +561,11 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       <div class="sub" id="d-sub">Le detail, le graphique et le consensus s'affichent ici.</div>
       <div class="big tnum" id="d-px">--</div>
       <div class="delta tnum" id="d-delta">--</div>
-      <div class="rhact"><button class="rb" type="button" id="d-news" title="Actualite de cette valeur">NEWS</button></div>
+      <div class="rhact">
+        <button class="rb" type="button" id="d-news" title="Actualite de cette valeur">NEWS</button>
+        <select class="srch" id="d-dest" aria-label="Liste de destination"></select>
+        <button class="rb" type="button" id="d-ajout" title="Ajouter cette valeur a la liste choisie">AJOUTER A</button>
+      </div>
     </div>
 
     <div class="sec">
@@ -563,13 +609,17 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
     </div>
 
     <div class="sec">
-      <h3>Barrieres</h3>
+      <h3>Correlations</h3>
       <div class="barr-head">
-        <label for="strike">Reference</label>
-        <input class="srch" id="strike" type="text" inputmode="decimal" placeholder="spot">
-        <button class="rb" type="button" id="strike-reset">SPOT</button>
+        <label for="corrwin">Fenetre</label>
+        <select class="srch" id="corrwin">
+          <option value="252">1 an</option>
+          <option value="756">3 ans</option>
+          <option value="63">3 mois</option>
+        </select>
+        <span class="flat" id="corr-n" style="font-size:10.5px"></span>
       </div>
-      <table class="barr" id="d-barr"></table>
+      <table class="barr" id="d-corr"></table>
     </div>
 
     <div class="sec">
@@ -1622,45 +1672,121 @@ function ilya(ts){
   var h=Math.round(m/60); if(h<24) return h+" h";
   var j=Math.round(h/24); return j+" j";
 }
+function normNews(t){
+  return String(t||"").toLowerCase()
+    .replace(/[éèêë]/g,"e").replace(/[àâä]/g,"a")
+    .replace(/[ôö]/g,"o").replace(/[ûüù]/g,"u")
+    .replace(/[îï]/g,"i").replace(/ç/g,"c");
+}
+function fenetreNews(){
+  var h={"24h":24,"7j":168,"30j":720}[cfg.newsper||"30j"];
+  return h?Date.now()-h*3600000:0;
+}
+function filtreNews(brut){
+  var q=normNews(cfg.newsq||"").trim();
+  var depuis=fenetreNews();
+  var src=cfg.newssrc||"";
+  return brut.filter(function(x){
+    if(cfg.newsf==="macro"&&x.cat!=="macro") return false;
+    if(cfg.newsf==="titres"&&x.cat!=="titre") return false;
+    if(src&&(x.src||"")!==src) return false;
+    if(depuis&&x.t&&x.t<depuis) return false;
+    if(q){
+      var foin=normNews(deco(x.titre))+" "+normNews(x.src)+" "+normNews((x.tags||[]).join(" "));
+      if(foin.indexOf(q)<0) return false;
+    }
+    return true;
+  });
+}
+function carteNews(x){
+  var tags=(x.tags||[]).slice(0,2).map(function(t){return '<span class="tg">'+esc(t)+"</span>";}).join("");
+  return '<a class="nw'+(x.cat==="macro"?" macro":"")+'" href="'+esc(x.lien)+
+    '" target="_blank" rel="noopener noreferrer">'+
+    '<span class="hr">'+esc(ilya(x.t))+"</span>"+
+    '<span class="ti">'+esc(deco(x.titre))+tags+"</span>"+
+    '<span class="sr">'+esc(x.src||"")+"</span></a>";
+}
 function renderNews(){
   var el=$("newsview"); if(!el) return;
   if(!NEWS){ el.innerHTML='<div class="empty">Chargement des actualites...</div>'; return; }
   if(NEWS.err){ el.innerHTML='<div class="empty">Actualites indisponibles ('+esc(NEWS.err)+').</div>'; return; }
-  var items=(NEWS.d.items||[]).filter(function(x){
-    if(cfg.newsf==="macro") return x.cat==="macro";
-    if(cfg.newsf==="titres") return x.cat==="titre";
-    return true;
-  });
-  var barre = NEWSVAL
-    ? '<div class="nwbar nwfiltre"><span class="puce">'+esc(NEWSVAL)+
-      '<button type="button" id="nw-tout" title="Revenir a l\'actualite generale">\u00d7</button></span>'+
-      '<span class="flat" style="font-size:10.5px">'+items.length+' titres  \u00b7  presse francophone</span>'+
-      '<span class="spacer" style="flex:1 1 auto"></span>'+
-      '<button class="fk" type="button" id="nw-reload">ACTUALISER</button></div>'
-    : '<div class="nwbar">'+
-      ["tout","macro","titres"].map(function(k){
-        return '<button class="fk" type="button" data-nf="'+k+'" aria-pressed="'+((cfg.newsf||"tout")===k?"true":"false")+'">'+
-          (k==="tout"?"TOUT":(k==="macro"?"MACRO ET GEOPOLITIQUE":"SOUS-JACENTS"))+"</button>";
-      }).join("")+
-      '<span class="flat" style="font-size:10.5px;margin-left:8px">'+items.length+" titres  \u00b7  "+
-      esc(cfg.tab)+'</span><span class="spacer" style="flex:1 1 auto"></span>'+
-      '<button class="fk" type="button" id="nw-reload">ACTUALISER</button></div>';
-  var liste=items.map(function(x){
-    var tags=(x.tags||[]).slice(0,2).map(function(t){return '<span class="tg">'+esc(t)+"</span>";}).join("");
-    return '<a class="nw'+(x.cat==="macro"?" macro":"")+'" href="'+esc(x.lien)+
-      '" target="_blank" rel="noopener noreferrer">'+
-      '<span class="hr">'+esc(ilya(x.t))+"</span>"+
-      '<span class="ti">'+esc(deco(x.titre))+tags+"</span>"+
-      '<span class="sr">'+esc(x.src||"")+"</span></a>";
-  }).join("");
-  el.innerHTML=barre+'<div class="nwlist">'+(liste||'<div class="empty">Aucun titre.</div>')+"</div>";
+  var brut=NEWS.d.items||[];
+  var items=filtreNews(brut);
+  var sources={};
+  brut.forEach(function(x){ if(x.src) sources[x.src]=(sources[x.src]||0)+1; });
+  var listeSrc=Object.keys(sources).sort(function(a,b){ return sources[b]-sources[a]; });
+
+  var onglets = NEWSVAL ? "" :
+    ["tout","macro","titres"].map(function(k){
+      return '<button class="fk" type="button" data-nf="'+k+'" aria-pressed="'+((cfg.newsf||"tout")===k?"true":"false")+'">'+
+        (k==="tout"?"TOUT":(k==="macro"?"MACRO ET GEOPOLITIQUE":"SOUS-JACENTS"))+"</button>";
+    }).join("");
+  var puce = NEWSVAL
+    ? '<span class="puce">'+esc(NEWSVAL)+'<button type="button" id="nw-tout" title="Revenir a l\'actualite generale">×</button></span>'
+    : "";
+  var barre='<div class="nwbar nwfiltre">'+puce+onglets+
+    '<span class="spacer" style="flex:1 1 auto"></span>'+
+    '<button class="fk" type="button" id="nw-grp" aria-pressed="'+(cfg.newsgrp?"true":"false")+'">PAR VALEUR</button>'+
+    '<button class="fk" type="button" id="nw-reload">ACTUALISER</button></div>'+
+    '<div class="nwfil">'+
+      '<input id="nw-q" type="search" placeholder="Rechercher dans les titres" value="'+esc(cfg.newsq||"")+'">'+
+      '<select id="nw-per">'+
+        [["24h","24 HEURES"],["7j","7 JOURS"],["30j","30 JOURS"],["tout","TOUT"]].map(function(k){
+          return '<option value="'+k[0]+'"'+((cfg.newsper||"30j")===k[0]?" selected":"")+">"+k[1]+"</option>";
+        }).join("")+"</select>"+
+      '<select id="nw-src"><option value="">TOUTES LES SOURCES</option>'+
+        listeSrc.map(function(t){
+          return '<option value="'+esc(t)+'"'+((cfg.newssrc||"")===t?" selected":"")+">"+esc(t)+" ("+sources[t]+")</option>";
+        }).join("")+"</select>"+
+      '<span class="flat" style="font-size:10.5px">'+items.length+" titre"+(items.length>1?"s":"")+
+        " sur "+brut.length+"</span>"+
+      (cfg.newsq||cfg.newssrc||(cfg.newsper&&cfg.newsper!=="30j")
+        ? '<button class="fk" type="button" id="nw-raz">EFFACER</button>' : "")+
+    "</div>";
+
+  var corps;
+  if(cfg.newsgrp && !NEWSVAL){
+    var par={};
+    items.forEach(function(x){
+      var k=(x.cat==="macro") ? "— Macro et geopolitique" : ((x.tags||[])[0]||"Divers");
+      (par[k]=par[k]||[]).push(x);
+    });
+    var cles=Object.keys(par).sort(function(a,b){ return par[b].length-par[a].length; });
+    corps=cles.map(function(k){
+      var o=currentList().filter(function(z){ return z.n===k; })[0];
+      var q=o?(Q[o.y]||{}):null;
+      var chiffre = q&&q.p!=null ? (fmt(q.p)+'  <span class="'+cls(q.pct)+'">'+pct(q.pct)+"</span>") : "";
+      return '<div class="nwgrp"'+(o?' data-y="'+esc(o.y)+'"':"")+'><h4>'+esc(k)+
+        "<span>"+par[k].length+" titre"+(par[k].length>1?"s":"")+"</span>"+
+        '<span class="spacer" style="flex:1 1 auto"></span><span class="px">'+chiffre+"</span></h4>"+
+        par[k].map(carteNews).join("")+"</div>";
+    }).join("");
+  } else {
+    corps='<div class="nwlist">'+items.map(carteNews).join("")+"</div>";
+  }
+  if(!items.length) corps='<div class="empty">Aucun titre ne correspond a ce filtre.</div>';
+
+  el.innerHTML=barre+corps;
   el.querySelectorAll("[data-nf]").forEach(function(b){
     b.addEventListener("click",function(){ cfg.newsf=b.getAttribute("data-nf"); save(); renderNews(); });
   });
-  var rl=document.getElementById("nw-reload");
-  if(rl) rl.addEventListener("click",function(){ loadNews(true); });
-  var tt=document.getElementById("nw-tout");
-  if(tt) tt.addEventListener("click",toutesLesNews);
+  var rl=$("nw-reload"); if(rl) rl.addEventListener("click",function(){ loadNews(true); });
+  var tt=$("nw-tout");   if(tt) tt.addEventListener("click",toutesLesNews);
+  var gp=$("nw-grp");    if(gp) gp.addEventListener("click",function(){ cfg.newsgrp=!cfg.newsgrp; save(); renderNews(); });
+  var qq=$("nw-q");
+  if(qq) qq.addEventListener("input",function(){
+    clearTimeout(window.__nwq);
+    var v=qq.value;
+    window.__nwq=setTimeout(function(){ cfg.newsq=v; save(); renderNews();
+      var f=$("nw-q"); if(f){ f.focus(); f.setSelectionRange(f.value.length,f.value.length); } },260);
+  });
+  var pp=$("nw-per"); if(pp) pp.addEventListener("change",function(){ cfg.newsper=pp.value; save(); renderNews(); });
+  var ss=$("nw-src"); if(ss) ss.addEventListener("change",function(){ cfg.newssrc=ss.value; save(); renderNews(); });
+  var rz=$("nw-raz"); if(rz) rz.addEventListener("click",function(){
+    cfg.newsq=""; cfg.newssrc=""; cfg.newsper="30j"; save(); renderNews(); });
+  el.querySelectorAll(".nwgrp[data-y]").forEach(function(d){
+    d.querySelector("h4").addEventListener("click",function(){ select(d.getAttribute("data-y"),true); });
+  });
 }
 
 /* ---------- F7 : scanner de tout l'univers ---------- */
@@ -1933,9 +2059,204 @@ function brancherCal(){
   });
 }
 
+/* ---------- F9 : credit, niveaux de CDS 5 ans ---------- */
+var CRED=null, credCharge=false, CRED_Q=null;
+
+function credCibles(){
+  var l=(cfg.credport==="univers") ? univers() : currentList();
+  return l.filter(function(o){ return !o.nf && (!o.t||o.t==="EQ"); }).slice(0,200);
+}
+function loadCredit(force){
+  var el=$("creditview");
+  var cle=(cfg.credport||"liste")+":"+cfg.tab;
+  if(credCharge) return;
+  if(!force && CRED && CRED.cle===cle && Date.now()-CRED.at<3600000){ renderCredit(); return; }
+  credCharge=true;
+  if(el && (!CRED||CRED.cle!==cle)) el.innerHTML='<div class="empty">Chargement des spreads de credit...</div>';
+  var cibles=credCibles();
+  var base=(cfg.base||"").replace(/\/$/,"");
+  var url=base+"/api/cds?q="+encodeURIComponent(cibles.map(function(o){return o.n;}).join("|"));
+  jget(url,40000).then(function(j){
+    CRED={d:j,at:Date.now(),cle:cle,cibles:cibles};
+    CRED_Q=j.quartiles||null;
+    CDS_ASOF=j.asof||CDS_ASOF;
+    cibles.forEach(function(o){ var t=(j.trouves||{})[o.n]; if(t) CDS[o.y]=t; else if(CDS[o.y]===undefined) CDS[o.y]=null; });
+  }).catch(function(e){ CRED={err:(e&&e.message)||"indisponible",at:Date.now(),cle:cle}; })
+    .then(function(){ credCharge=false; renderCredit(); });
+}
+function pdImplicite(bp){ return 1-Math.pow(1-(bp/10000)/(1-0.40),5); }
+function couleurSpread(bp){
+  if(bp<40)  return "#1fb573";
+  if(bp<90)  return "#7fc241";
+  if(bp<160) return "#e0b43a";
+  if(bp<300) return "#e07b2f";
+  if(bp<600) return "#d65135";
+  return "#b02a20";
+}
+function lignesCredit(){
+  if(!CRED||!CRED.d) return [];
+  var tr=CRED.d.trouves||{};
+  return (CRED.cibles||[]).map(function(o){
+    var t=tr[o.n]; if(!t) return null;
+    return {y:o.y, n:o.n, liste:listeDe(o.y), spread:t.spread, emetteur:t.emetteur,
+            dev:t.dev, pc:t.percentile, rang:t.rang, vol:volAnn(o.y,252), perf:perfs(o.y).ytd};
+  }).filter(Boolean).sort(function(a,b){ return a.spread-b.spread; });
+}
+function renderCredit(){
+  var el=$("creditview"); if(!el) return;
+  var barre='<div class="calbar">'+
+    '<label class="flat" style="font-size:10.5px">PERIMETRE '+
+      '<select id="cr-port"><option value="liste">LA LISTE COURANTE</option>'+
+      '<option value="univers">TOUT L\'UNIVERS</option></select></label>'+
+    '<span class="spacer" style="flex:1 1 auto"></span>'+
+    '<button class="fk" type="button" id="cr-reload">ACTUALISER</button></div>';
+  if(CRED&&CRED.err){
+    el.innerHTML=barre+'<div class="empty">Spreads indisponibles ('+esc(CRED.err)+').</div>';
+    brancherCredit(); return;
+  }
+  var L=lignesCredit();
+  if(!L.length){
+    el.innerHTML=barre+'<div class="empty">Aucun emetteur de cette liste n\'a de CDS cote chez ICE. '+
+      'Les indices et les trackers n\'en ont pas, essayez une liste d\'actions.</div>';
+    brancherCredit(); return;
+  }
+  var maxi=Math.max(140, L[L.length-1].spread*1.05);
+  var som=0; L.forEach(function(r){ som+=r.spread; });
+  var moy=som/L.length;
+  var med=L[Math.floor(L.length/2)].spread;
+  var pire=L[L.length-1], meilleur=L[0];
+  var q=CRED_Q||{};
+
+  var kpi='<div class="crkpi">'+
+    '<div class="k"><span>Emetteurs couverts</span><b>'+L.length+'</b>'+
+      '<i>sur '+(CRED.cibles||[]).length+" valeurs de la liste</i></div>"+
+    '<div class="k"><span>Spread moyen</span><b>'+moy.toFixed(0)+' pb</b><i>mediane '+med.toFixed(0)+" pb</i></div>"+
+    '<div class="k"><span>Signature la plus solide</span><b>'+meilleur.spread.toFixed(0)+' pb</b>'+
+      "<i>"+esc(meilleur.n)+"</i></div>"+
+    '<div class="k"><span>Signature la plus tendue</span><b>'+pire.spread.toFixed(0)+' pb</b>'+
+      "<i>"+esc(pire.n)+"</i></div>"+
+    (q.mediane!=null?'<div class="k"><span>Mediane univers ICE</span><b>'+q.mediane.toFixed(0)+' pb</b>'+
+      "<i>"+(CRED.d.n||0)+" emetteurs cotes</i></div>":"")+
+    "</div>";
+
+  var barres=L.map(function(r){
+    var w=Math.max(2, r.spread/maxi*100);
+    return '<div class="crbar" data-y="'+esc(r.y)+'" title="'+esc(r.emetteur)+'">'+
+      '<span class="nm">'+esc(r.n)+"</span>"+
+      '<span class="tr"><i style="width:'+w.toFixed(1)+"%;background:"+couleurSpread(r.spread)+'"></i></span>'+
+      '<span class="sp">'+r.spread.toFixed(0)+" pb</span>"+
+      '<span class="pd">'+(pdImplicite(r.spread)*100).toFixed(1)+"%</span></div>";
+  }).join("");
+
+  var classement='<div class="crpan"><h4>Spreads 5 ans, du plus solide au plus tendu</h4>'+barres+
+    '<div class="crlg">'+
+      '<span><b style="color:#1fb573">&#9632;</b> moins de 40 pb</span>'+
+      '<span><b style="color:#7fc241">&#9632;</b> 40 a 90</span>'+
+      '<span><b style="color:#e0b43a">&#9632;</b> 90 a 160</span>'+
+      '<span><b style="color:#e07b2f">&#9632;</b> 160 a 300</span>'+
+      '<span><b style="color:#d65135">&#9632;</b> 300 a 600</span>'+
+      '<span><b style="color:#b02a20">&#9632;</b> au-dela</span>'+
+      '<span>La colonne de droite est le defaut cumule implicite a 5 ans, recuperation 40 pour cent.</span>'+
+    "</div></div>";
+
+  var nuage='<div class="crpan"><h4>Spread de credit face a la volatilite 1 an</h4>'+
+    '<div class="crnu"><canvas id="cr-nu"></canvas></div>'+
+    '<div class="crlg"><span>Chaque point est un emetteur. Vers la droite le titre bouge, '+
+    'vers le haut le marche doute de sa signature. Le coin en haut a gauche signale '+
+    'une tension de credit que l\'action ne reflete pas encore.</span></div></div>';
+
+  var tab='<div class="crpan"><h4>Detail</h4>'+
+    '<table class="sc"><thead><tr><th>SOUS-JACENT</th><th>ENTITE DE REFERENCE</th><th>CDS 5A</th>'+
+    "<th>DEFAUT 5A</th><th>RANG ICE</th><th>VOL 1A</th><th>YTD</th><th>LISTE</th></tr></thead><tbody>"+
+    L.map(function(r){
+      return '<tr data-y="'+esc(r.y)+'"><td>'+esc(r.n)+"</td>"+
+        '<td class="flat" style="text-align:left">'+esc(r.emetteur)+"</td>"+
+        '<td class="tnum">'+r.spread.toFixed(0)+" pb</td>"+
+        '<td class="tnum flat">'+(pdImplicite(r.spread)*100).toFixed(1)+"%</td>"+
+        '<td class="tnum flat">'+(r.rang?(r.rang+" / "+(CRED.d.n||"--")):"--")+"</td>"+
+        '<td class="tnum flat">'+(r.vol!=null?r.vol.toFixed(1)+"%":"--")+"</td>"+
+        '<td class="tnum '+cls(r.perf)+'">'+pct(r.perf)+"</td>"+
+        '<td class="flat">'+esc(r.liste||"")+"</td></tr>";
+    }).join("")+"</tbody></table></div>";
+
+  el.innerHTML=barre+'<div class="crwrap">'+kpi+classement+nuage+tab+
+    '<div class="lgd flat" style="padding:0 2px 14px">Source ICE Clear Credit, prix de reglement '+
+    'de fin de journee du '+esc(CDS_ASOF||"--")+', convertis en spread par intensite constante. '+
+    'Donnee quotidienne, pas de cotation en continu.</div></div>';
+  brancherCredit();
+  dessineNuage(L);
+}
+function dessineNuage(L){
+  var cv=$("cr-nu"); if(!cv) return;
+  var pts=L.filter(function(r){ return r.vol!=null; });
+  var dpr=window.devicePixelRatio||1;
+  var w=cv.clientWidth||700, h=cv.clientHeight||300;
+  cv.width=w*dpr; cv.height=h*dpr;
+  var g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  if(!pts.length){ g.fillStyle="#8b949e"; g.font="12px monospace";
+    g.fillText("Volatilites pas encore chargees.",14,24); return; }
+  var ml=52, mr=14, mt=14, mb=44;
+  var vx=pts.map(function(p){return p.vol;}), vy=pts.map(function(p){return p.spread;});
+  var x0=0, x1=Math.max.apply(null,vx)*1.1, y0=0, y1=Math.max.apply(null,vy)*1.1;
+  var X=function(v){ return ml+(v-x0)/(x1-x0)*(w-ml-mr); };
+  var Y=function(v){ return h-mb-(v-y0)/(y1-y0)*(h-mt-mb); };
+  g.strokeStyle="#1c2124"; g.lineWidth=1; g.font="10px monospace"; g.fillStyle="#8d867a";
+  var i;
+  for(i=0;i<=4;i++){
+    var vy2=y0+(y1-y0)*i/4, yy=Y(vy2);
+    g.beginPath(); g.moveTo(ml,yy); g.lineTo(w-mr,yy); g.stroke();
+    g.fillText(vy2.toFixed(0)+" pb",6,yy+3);
+  }
+  for(i=0;i<=4;i++){
+    var vx2=x0+(x1-x0)*i/4, xx=X(vx2);
+    g.beginPath(); g.moveTo(xx,mt); g.lineTo(xx,h-mb); g.stroke();
+    g.fillText(vx2.toFixed(0)+"%",xx-10,h-mb+15);
+  }
+  g.fillStyle="#8d867a"; g.font="10px monospace";
+  g.fillText("spread CDS 5 ans en ordonnee, volatilite annualisee sur 1 an en abscisse",ml+4,h-6);
+  pts.forEach(function(p){
+    var x=X(p.vol), y=Y(p.spread);
+    g.fillStyle=couleurSpread(p.spread);
+    g.beginPath(); g.arc(x,y,4.5,0,Math.PI*2); g.fill();
+    g.strokeStyle="rgba(0,0,0,.55)"; g.lineWidth=1; g.stroke();
+  });
+  var poses=[];
+  var libre=function(x,y){
+    for(var i=0;i<poses.length;i++){
+      if(Math.abs(poses[i][1]-y)<11 && Math.abs(poses[i][0]-x)<96) return false;
+    }
+    return true;
+  };
+  var ordre=pts.slice().sort(function(a,b){ return b.spread-a.spread; });
+  g.font="9.5px monospace";
+  ordre.forEach(function(p){
+    var x=X(p.vol)+7, y=Y(p.spread)+3;
+    if(!libre(x,y)) return;
+    poses.push([x,y]);
+    var t=p.n.length>15?p.n.slice(0,14)+"…":p.n;
+    if(x+t.length*5.6>w-mr){ x=X(p.vol)-7-t.length*5.6; }
+    g.fillStyle="#cdc6ba"; g.fillText(t,x,y);
+  });
+  if(poses.length<pts.length){
+    g.fillStyle="#8d867a";
+    g.fillText((pts.length-poses.length)+" etiquettes masquees, le detail est dans le tableau",
+               ml+4,h-mb-7);
+  }
+}
+function brancherCredit(){
+  var el=$("creditview"); if(!el) return;
+  var p=$("cr-port"); if(p){ p.value=cfg.credport||"liste";
+    p.addEventListener("change",function(){ cfg.credport=p.value; save(); loadCredit(true); }); }
+  var r=$("cr-reload"); if(r) r.addEventListener("click",function(){ loadCredit(true); });
+  el.querySelectorAll("[data-y]").forEach(function(d){
+    d.addEventListener("click",function(){ select(d.getAttribute("data-y"),true); });
+  });
+}
+
 function renderAll(){
   var heat=$("heat"), mon=$("mon"), ch=$("charts"), pv=$("perfview"), rv=$("ratesview"), nv=$("newsview"),
-      sv=$("scanview"), cv2=$("calview"), av=$("adminview");
+      sv=$("scanview"), cv2=$("calview"), crv=$("creditview"), av=$("adminview");
   heat.hidden = cfg.view!=="heat";
   ch.hidden   = cfg.view!=="charts";
   pv.hidden   = cfg.view!=="perf";
@@ -1943,6 +2264,7 @@ function renderAll(){
   nv.hidden   = cfg.view!=="news";
   sv.hidden   = cfg.view!=="scan";
   cv2.hidden  = cfg.view!=="cal";
+  crv.hidden  = cfg.view!=="credit";
   av.hidden   = cfg.view!=="admin";
   mon.hidden  = (cfg.view!=="mon");
   if(cfg.view==="heat") renderHeat();
@@ -1952,6 +2274,7 @@ function renderAll(){
   else if(cfg.view==="news") loadNews();
   else if(cfg.view==="scan"){ renderScan(); chaufferScanner(); }
   else if(cfg.view==="cal") loadCal();
+  else if(cfg.view==="credit") loadCredit();
   else if(cfg.view==="admin") renderAdmin();
   else renderTable();
   renderDetail(); renderTape();
@@ -1995,7 +2318,8 @@ function renderDetail(){
     ["Mise a jour",q.t?hhmmss(new Date(q.t),"Europe/Paris"):"--"]]
     .map(function(p){return "<dt>"+p[0]+"</dt><dd>"+p[1]+"</dd>";}).join("");
 
-  renderRisk(); renderCds(); renderBarr(); renderDiv(); drawChart();
+  renderRisk(); renderCds(); renderCorr(); renderDiv(); drawChart();
+  majDestinations();
 }
 
 /* ---------- credit : CDS 5 ans, reglement quotidien ICE ---------- */
@@ -2068,20 +2392,58 @@ function renderRisk(){
     L("Perf 1 an / vol", sharpe==null?"--":sharpe.toFixed(2), cls(sharpe));
 }
 
-var BARRIERES=[-10,-20,-30,-40,-50,-60];
-function renderBarr(){
-  var el=$("d-barr"), q=Q[sel]||{}, o=SYMS[sel]||{};
-  if(o.nf||q.p==null){ el.innerHTML='<tr><td class="flat">Pas de cours disponible.</td></tr>'; return; }
-  var ref=parseFloat(String(cfg.strike||"").replace(",","."));
-  if(!isFinite(ref)||ref<=0) ref=q.p;
-  var rows=BARRIERES.map(function(b){
-    var lvl=ref*(1+b/100);
-    var marge=(q.p/lvl-1)*100;            /* chute necessaire pour toucher */
-    var touche=q.p<=lvl;
-    return '<tr'+(touche?' class="touche"':"")+'><td>'+b+" %</td><td class=\"tnum\">"+fmt(lvl)+
-      '</td><td class="tnum '+(touche?"down":"up")+'">'+(touche?"touchee":"-"+marge.toFixed(1)+"%")+"</td></tr>";
+/* ---------- correlations avec les autres valeurs de la liste ---------- */
+function correl(y1,y2,n){
+  if(y1===y2) return 1;
+  var z=alignRets(y1,y2,n); if(!z) return null;
+  var m=Math.min(z.a.length,z.b.length), i, ma=0, mb=0;
+  if(m<30) return null;
+  for(i=0;i<m;i++){ ma+=z.a[i]; mb+=z.b[i]; } ma/=m; mb/=m;
+  var cov=0, va=0, vb=0;
+  for(i=0;i<m;i++){ var da=z.a[i]-ma, db=z.b[i]-mb; cov+=da*db; va+=da*da; vb+=db*db; }
+  if(va<=0||vb<=0) return null;
+  return cov/Math.sqrt(va*vb);
+}
+function teinteCorr(c){
+  if(c==null) return "flat";
+  if(c>=0.75) return "down";
+  if(c>=0.45) return "flat";
+  return "up";
+}
+function renderCorr(){
+  var el=$("d-corr"); if(!el) return;
+  var o=SYMS[sel]||{};
+  var info=$("corr-n");
+  if(o.nf){ el.innerHTML='<tr><td class="flat">Pas de cotation, correlation impossible.</td></tr>';
+    if(info) info.textContent=""; return; }
+  var n=+(cfg.corrwin||252);
+  var autres=currentList().filter(function(x){ return !x.nf && x.y!==sel; });
+  var lignes=autres.map(function(x){ return {y:x.y, n:x.n, c:correl(sel,x.y,n)}; })
+                   .filter(function(r){ return r.c!=null; })
+                   .sort(function(a,b){ return b.c-a.c; });
+  if(!lignes.length){
+    el.innerHTML='<tr><td class="flat">Historique insuffisant sur cette liste. '+
+      'Laissez le terminal charger, puis revenez.</td></tr>';
+    if(info) info.textContent=""; return;
+  }
+  var somme=0; lignes.forEach(function(r){ somme+=r.c; });
+  var moy=somme/lignes.length;
+  var haut=lignes[0], bas=lignes[lignes.length-1];
+  if(info) info.textContent=lignes.length+" valeurs  ·  moyenne "+moy.toFixed(2);
+  var corps=lignes.map(function(r){
+    return '<tr data-y="'+esc(r.y)+'" class="cliq"><td>'+esc(r.n)+
+      '</td><td class="tnum '+teinteCorr(r.c)+'">'+r.c.toFixed(2)+
+      '</td><td class="tnum flat">'+(volAnn(r.y,252)!=null?volAnn(r.y,252).toFixed(0)+"%":"--")+"</td></tr>";
   }).join("");
-  el.innerHTML='<thead><tr><th>Barriere</th><th>Niveau</th><th>Marge</th></tr></thead><tbody>'+rows+"</tbody>";
+  el.innerHTML='<thead><tr><th>Face a</th><th>Correl.</th><th>Vol 1a</th></tr></thead><tbody>'+
+    corps+"</tbody>"+
+    '<tfoot><tr><td class="flat">La plus forte</td><td class="tnum flat" colspan="2">'+
+      esc(haut.n)+"  "+haut.c.toFixed(2)+'</td></tr>'+
+    '<tr><td class="flat">La plus faible</td><td class="tnum flat" colspan="2">'+
+      esc(bas.n)+"  "+bas.c.toFixed(2)+"</td></tr></tfoot>";
+  el.querySelectorAll("tr[data-y]").forEach(function(tr){
+    tr.addEventListener("click",function(){ select(tr.getAttribute("data-y"),true); });
+  });
 }
 
 function renderDiv(){
@@ -2416,7 +2778,6 @@ function redraw(){ drawChart(); if(!$("fullwrap").hidden) drawFull(); }
 
 /* ===================== selection + evenements ===================== */
 function select(y,byUser){
-  if(sel!==y){ cfg.strike=""; var sf=$("strike"); if(sf) sf.value=""; }
   sel=y; CH={t:[],c:[],sym:null}; CONS[y]=CONS[y]||null;
   document.querySelectorAll('#tbody tr,.mtx tr,.chc').forEach(function(n){
     n.setAttribute("aria-selected", n.getAttribute("data-y")===y?"true":"false");
@@ -2596,11 +2957,12 @@ $("ranges").addEventListener("click",function(e){
 });
 document.addEventListener("keydown",function(e){
   if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
-  var map={F1:"mon",F2:"heat",F3:"perf",F4:"charts",F5:"rates",F6:"news",F7:"scan",F8:"cal",F9:"admin"};
+  var map={F1:"mon",F2:"heat",F3:"perf",F4:"charts",F5:"rates",F6:"news",F7:"scan",F8:"cal",
+            F9:"credit",F10:"admin"};
   if(map[e.key]){ e.preventDefault(); var b=document.querySelector('.fk[data-view="'+map[e.key]+'"]'); if(b) b.click(); }
   if(e.key==="/"){ e.preventDefault(); $("q").focus(); }
 });
-window.addEventListener("resize",function(){ clearTimeout(window.__rz); window.__rz=setTimeout(function(){ redraw(); if(cfg.view==="rates") renderRates(); },150); });
+window.addEventListener("resize",function(){ clearTimeout(window.__rz); window.__rz=setTimeout(function(){ redraw(); if(cfg.view==="rates") renderRates(); if(cfg.view==="credit") dessineNuage(lignesCredit()); },150); });
 
 function bannerText(err){
   var why=(err&&err.message)||"erreur";
@@ -2624,8 +2986,7 @@ $("banner-x").addEventListener("click",hideBanner);
     else toast("Cloche de seance desactivee.");
   });
 })();
-$("strike").addEventListener("input",function(){ cfg.strike=this.value; save(); renderBarr(); });
-$("strike-reset").addEventListener("click",function(){ cfg.strike=""; $("strike").value=""; save(); renderBarr(); });
+$("corrwin").addEventListener("change",function(){ cfg.corrwin=+this.value; save(); renderCorr(); });
 $("cfgbtn").addEventListener("click",function(){ if(!document.getElementById("basein")) askBase(); });
 function askBase(){
   var cur=cfg.base||"";
@@ -2943,7 +3304,8 @@ try{
   SERVED = /^https?:$/.test(location.protocol) && !/(^|\.)claude\.ai$/i.test(location.hostname);
   if(SERVED){ cfg.base=location.origin; cfg.src="auto"; save(); }
 }catch(e){}
-$("src").value=cfg.src; $("hmw").value=cfg.hmw; $("q").value=cfg.q||""; $("strike").value=cfg.strike||"";
+$("src").value=cfg.src; $("hmw").value=cfg.hmw; $("q").value=cfg.q||"";
+$("corrwin").value=String(cfg.corrwin||252);
 if(SERVED){
   var ob=$("src").querySelector('option[value="backend"]');
   if(ob) ob.textContent="BACKEND "+location.hostname.split(".")[0].toUpperCase();
@@ -3080,6 +3442,45 @@ document.addEventListener("click",function(e){
 (function(){
   var b=$("d-news"); if(!b) return;
   b.addEventListener("click",function(){ if(sel) newsDeLaValeur(sel); });
+})();
+
+/* ---------- copier une valeur deja suivie vers une autre liste ---------- */
+function majDestinations(){
+  var sl=$("d-dest"); if(!sl) return;
+  var dedans=function(t){ return (UNIVERSE[t]||[]).some(function(x){ return x.y===sel; }); };
+  var dispo=TABS.filter(function(t){ return t!=="OVERALL" && !dedans(t); });
+  var garde=sl.value;
+  sl.innerHTML=dispo.map(function(t){ return '<option value="'+esc(t)+'">'+esc(t)+"</option>"; }).join("")+
+    '<option value="__NOUVELLE__">+ nouvelle liste...</option>';
+  if(dispo.indexOf(garde)>=0) sl.value=garde;
+  var b=$("d-ajout"); if(b) b.disabled=false;
+}
+function ajouterADestination(){
+  var sl=$("d-dest"); if(!sl||!sel) return;
+  var o=SYMS[sel]; if(!o){ toast("Selectionnez d'abord une valeur."); return; }
+  var cible=sl.value;
+  if(cible==="__NOUVELLE__"){
+    var nom=(prompt("Nom de la nouvelle liste")||"").trim().toUpperCase().slice(0,22);
+    if(!nom) return;
+    if(TABS.indexOf(nom)>=0){ toast("Cette liste existe deja."); return; }
+    cfg.wl=cfg.wl||[]; cfg.wl.push(nom); UNIVERSE[nom]=[];
+    cible=nom;
+  }
+  if((UNIVERSE[cible]||[]).some(function(x){ return x.y===sel; })){
+    toast(o.n+" est deja dans "+cible+"."); return;
+  }
+  if(cfg.removed&&cfg.removed[cible]){
+    cfg.removed[cible]=cfg.removed[cible].filter(function(x){ return x!==sel; });
+  }
+  addCustom(cible,{n:o.n,y:o.y,c:o.c,t:o.t,nf:o.nf||0});
+  save(); rebuildUniverse(); buildTabs(); renderAll(); renderWl(); renderChips();
+  if(window.majSelecteurOnglets) majSelecteurOnglets();
+  majDestinations();
+  toast(o.n+" ajoute a "+cible+".");
+}
+(function(){
+  var b=$("d-ajout"); if(!b) return;
+  b.addEventListener("click",ajouterADestination);
 })();
 majBandeau();
 if(SESSION&&SESSION.role==="admin"){ chargerComptes(true); setInterval(function(){ chargerComptes(true); },60000); }
