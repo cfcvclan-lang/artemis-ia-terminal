@@ -700,7 +700,7 @@ def _nettoie_titre_gn(t: str):
     return t, ""
 
 
-def presse_valeur(terme, maxi=7):
+def presse_valeur(terme, maxi=22):
     """Actualite francaise d'une valeur, via le flux public de Google Actualites.
 
     Ce flux agrege Les Echos, Boursorama, Zonebourse, Investing, Reuters France
@@ -709,7 +709,8 @@ def presse_valeur(terme, maxi=7):
     tous un flux de syndication par valeur.
     """
     out = []
-    requete = '"' + terme + '" (bourse OR action OR resultats OR marche)'
+    requete = ('"' + terme + '" (bourse OR action OR resultats OR marche OR analyste) '
+               'when:30d')
     url = ("https://news.google.com/rss/search?q=" + requests.utils.quote(requete) +
            "&hl=fr&gl=FR&ceid=FR:fr")
     try:
@@ -742,7 +743,7 @@ def presse_valeur(terme, maxi=7):
 
 @app.get("/api/news")
 def news(q: str = "", macro: int = 1):
-    termes = [x.strip() for x in q.split("|") if x.strip()][:14]
+    termes = [x.strip() for x in q.split("|") if x.strip()][:30]
     cle = "news:" + "|".join(termes) + ":" + str(macro)
     hit = cache_get(cle, NEWS_TTL)
     if hit:
@@ -765,7 +766,7 @@ def news(q: str = "", macro: int = 1):
         vus.add(it["lien"])
         net.append(it)
     net.sort(key=lambda x: x.get("t") or 0, reverse=True)
-    payload = {"asof": int(time.time() * 1000), "items": net[:120]}
+    payload = {"asof": int(time.time() * 1000), "items": net[:400]}
     if net:
         cache_put(cle, payload)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
@@ -879,7 +880,23 @@ def charger_cds():
                            "spread": sp, "ans": round(ans, 2), "rang": rang}
     for v in lignes.values():
         v.pop("rang", None)
+    # rang et percentile dans l'univers ICE : situer une signature parmi ses pairs
+    ordre = sorted(lignes.values(), key=lambda v: v["spread"])
+    total = len(ordre) or 1
+    for i, v in enumerate(ordre):
+        v["rang_univers"] = i + 1
+        v["percentile"] = round(100.0 * (i + 1) / total, 1)
+    sp = [v["spread"] for v in ordre]
+
+    def _q(p):
+        if not sp:
+            return None
+        k = min(len(sp) - 1, max(0, int(round(p * (len(sp) - 1)))))
+        return sp[k]
+
     payload = {"asof": asof, "n": len(lignes), "source": "ICE Clear Credit",
+               "quartiles": {"q1": _q(0.25), "mediane": _q(0.5), "q3": _q(0.75),
+                             "d9": _q(0.9)},
                "emetteurs": lignes}
     if lignes:
         cache_put("cds", payload)
@@ -978,9 +995,12 @@ def cds(q: str = ""):
         trouve = rapprocher(n, table)
         if trouve:
             sortie[n] = {"spread": trouve["spread"], "emetteur": trouve["nom"],
-                         "dev": trouve["dev"], "ans": trouve["ans"]}
+                         "dev": trouve["dev"], "ans": trouve["ans"],
+                         "rang": trouve.get("rang_univers"),
+                         "percentile": trouve.get("percentile")}
     return JSONResponse({"asof": d.get("asof"), "n": d.get("n"), "source": d.get("source"),
-                         "trouves": sortie}, headers={"Cache-Control": "no-store"})
+                         "quartiles": d.get("quartiles"), "trouves": sortie},
+                        headers={"Cache-Control": "no-store"})
 
 
 # =====================================================================
