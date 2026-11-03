@@ -52,7 +52,7 @@ button,input,select{font:inherit;color:inherit}
 .brand{font-family:var(--f-cond);font-size:19px;font-weight:700;letter-spacing:.14em;color:var(--amber);white-space:nowrap}
 .brand span{color:var(--fg-dim);font-weight:500}
 .cmd-sep{width:1px;height:18px;background:var(--grid2)}
-.places{display:flex;gap:9px;overflow-x:auto;scrollbar-width:none;max-width:52vw;min-width:0}
+.places{display:flex;gap:9px;overflow-x:auto;scrollbar-width:none;max-width:42vw;min-width:0}
 @media(max-width:1280px){.places{order:9;flex:1 1 100%;max-width:100%}}
 .places::-webkit-scrollbar{display:none}
 .pl{flex:0 0 auto;display:flex;align-items:center;gap:4px;font-size:10.5px;color:var(--fg-dim);white-space:nowrap}
@@ -141,6 +141,9 @@ table.adm-t tr:hover td{background:#0e1215}
 .inst{background:var(--amber);border:1px solid var(--amber);color:#000;font-weight:600;padding:2px 10px;cursor:pointer;border-radius:2px;font-size:11px;letter-spacing:.06em;white-space:nowrap}
 .inst:hover{background:var(--amber-soft)}
 .src-pick{background:#000;border:1px solid var(--grid2);color:var(--amber-soft);padding:2px 6px;border-radius:2px;font-size:11px}
+.signe{flex:0 0 auto;font-family:var(--f-cond);font-size:12px;letter-spacing:.14em;
+  color:var(--amber-dim);white-space:nowrap;text-transform:uppercase;user-select:none}
+@media(max-width:900px){.signe{display:none}}
 
 /* ---------- onglets portefeuilles ---------- */
 .tabs{
@@ -463,7 +466,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
   <span class="moi" id="moi" hidden></span>
   <button class="fk" type="button" id="deco" hidden>QUITTER</button>
   <button class="inst" type="button" id="inst" hidden>INSTALLER L'APPLICATION</button>
-  <label class="led" for="src">SOURCE
+  <label class="led" for="src" id="srcwrap" hidden>SOURCE
     <select class="src-pick" id="src">
       <option value="auto">AUTO</option>
       <option value="yahoo">YAHOO DIRECT</option>
@@ -471,6 +474,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       <option value="demo">SIMULATION</option>
     </select>
   </label>
+  <span class="signe" title="Othman Bakhtaoui">Designed by OB</span>
   <span class="led"><span class="dot" id="led"></span><span id="led-txt">INIT</span></span>
 </header>
 
@@ -2993,10 +2997,18 @@ function askBase(){
   var w=document.createElement("div");
   w.className="banner"; w.innerHTML='<b>&gt;</b><label style="flex:1 1 auto;min-width:0">URL backend '+
     '<input class="srch" id="basein" style="width:100%" value="'+esc(cur)+'" placeholder="https://mon-service.onrender.com"></label>'+
+    '<span id="srcslot"></span>'+
     '<button type="button" id="basego">VALIDER</button>';
   $("banner").insertAdjacentElement("afterend",w);
+  /* le choix de la source vit ici plutot que dans la barre du haut */
+  var sw=$("srcwrap");
+  if(sw){ w.querySelector("#srcslot").appendChild(sw); sw.hidden=false; }
+  var ranger=function(){
+    var h=document.querySelector("header.cmd");
+    if(sw&&h){ sw.hidden=true; h.insertBefore(sw,document.querySelector(".signe")); }
+  };
   w.querySelector("#basego").addEventListener("click",function(){
-    cfg.base=w.querySelector("#basein").value.trim(); save(); w.remove(); HIST={};CONS={};
+    cfg.base=w.querySelector("#basein").value.trim(); save(); ranger(); w.remove(); HIST={};CONS={};
     refresh().then(warmHist);
   });
 }
