@@ -420,6 +420,14 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
 .fullbar{flex-wrap:wrap;row-gap:6px}
 .fullbar .ranges{margin:0}
 .fullbar .led{font-size:10.5px}
+.pal{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--fg-dim);
+  letter-spacing:.06em;white-space:nowrap}
+.pal input[type=color]{width:26px;height:20px;padding:0;border:1px solid var(--grid2);
+  border-radius:2px;background:#000;cursor:pointer}
+.pal input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+.pal input[type=color]::-webkit-color-swatch{border:none;border-radius:1px}
+#f-cmp-liste{max-width:150px}
+#f-comp{max-width:190px}
 .fullbar .spacer{flex:1 1 auto}
 .fullwrap .cvwrap{margin:10px;min-height:0}
 .kv{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:11.5px}
@@ -680,12 +688,38 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       <button class="rb" type="button" data-mm="boll">BOLLINGER</button>
       <button class="rb" type="button" data-mm="vol">VOLUME</button>
       <button class="rb" type="button" data-mm="rsi">RSI 14</button>
+      <button class="rb" type="button" data-mm="stoch">STOCHASTIQUE</button>
+      <button class="rb" type="button" data-mm="vola">VOLATILITE</button>
       <button class="rb" type="button" id="f-log">ECHELLE LOG</button>
     </div>
     <span class="cmd-sep"></span>
-    <label class="led" for="f-comp">COMPARER
-      <select class="src-pick" id="f-comp"><option value="">aucun</option></select>
+    <label class="led" for="f-cmp-liste">COMPARER
+      <select class="src-pick" id="f-cmp-liste"></select>
     </label>
+    <select class="src-pick" id="f-comp" aria-label="Sous-jacent compare"><option value="">aucun</option></select>
+    <span class="cmd-sep"></span>
+    <label class="led" for="f-grille">GRILLE
+      <select class="src-pick" id="f-grille">
+        <option value="h">HORIZONTALE</option>
+        <option value="complete">COMPLETE</option>
+        <option value="aucune">AUCUNE</option>
+      </select>
+    </label>
+    <label class="led" for="f-volawin">FENETRE VOL
+      <select class="src-pick" id="f-volawin">
+        <option value="10">10 SEANCES</option>
+        <option value="20">20 SEANCES</option>
+        <option value="60">60 SEANCES</option>
+        <option value="120">120 SEANCES</option>
+      </select>
+    </label>
+    <span class="cmd-sep"></span>
+    <span class="pal">COULEURS
+      <input type="color" id="f-col-trace" title="Couleur du trace" value="#00d46a">
+      <input type="color" id="f-col-fond" title="Couleur du fond" value="#000000">
+      <input type="color" id="f-col-fill" title="Couleur du remplissage" value="#00d46a">
+      <button class="rb" type="button" id="f-col-raz" title="Revenir aux couleurs d'origine">RAZ</button>
+    </span>
     <span class="spacer"></span>
     <span class="flat" id="full-hint">Glisser pour zoomer, double-clic pour annuler, fleches pour deplacer le reticule</span>
     <button class="rb" type="button" id="f-png">IMAGE</button>
@@ -2688,6 +2722,68 @@ function chartSlice(){
     return {c:c.slice(z.a,z.b), t:t.slice(z.a,z.b), v:v.slice(z.a,z.b), off:z.a};
   return {c:c, t:t, v:v, off:0};
 }
+/* ---------- palette et indicateurs du plein ecran ---------- */
+var PAL_DEF={trace:"", fond:"#000000", fill:""};
+function palette(grand){
+  var p=(grand&&cfg.pal)?cfg.pal:{};
+  var fond=p.fond||PAL_DEF.fond;
+  return {
+    trace: p.trace||"",
+    fond: fond,
+    fill: p.fill?teinte(p.fill,0.30):"",
+    fillBas: p.fill?teinte(p.fill,0):"rgba(0,0,0,0)",
+    grille: p.grille||(grand?"#1f262b":"#1a1f22")
+  };
+}
+function teinte(hex,alpha){
+  var m=/^#?([0-9a-f]{6})$/i.exec(String(hex||""));
+  if(!m) return "rgba(0,0,0,"+alpha+")";
+  var n=parseInt(m[1],16);
+  return "rgba("+((n>>16)&255)+","+((n>>8)&255)+","+(n&255)+","+alpha+")";
+}
+/* stochastique %K sur n seances, %D moyenne mobile de %K */
+function stochastique(C,n,d){
+  n=n||14; d=d||3;
+  var K=[], i, j;
+  for(i=0;i<C.length;i++){
+    if(i<n-1||C[i]==null){ K.push(null); continue; }
+    var bas=Infinity, haut=-Infinity, ok=true;
+    for(j=i-n+1;j<=i;j++){
+      if(C[j]==null){ ok=false; break; }
+      if(C[j]<bas) bas=C[j];
+      if(C[j]>haut) haut=C[j];
+    }
+    if(!ok||haut<=bas){ K.push(null); continue; }
+    K.push((C[i]-bas)/(haut-bas)*100);
+  }
+  var D=[];
+  for(i=0;i<K.length;i++){
+    if(i<d-1){ D.push(null); continue; }
+    var som=0, cpt=0;
+    for(j=i-d+1;j<=i;j++){ if(K[j]!=null){ som+=K[j]; cpt++; } }
+    D.push(cpt===d?som/d:null);
+  }
+  return {k:K, d:D};
+}
+/* volatilite annualisee sur une fenetre glissante, en pourcentage */
+function volGlissante(C,n){
+  n=n||20;
+  var r=[null], i;
+  for(i=1;i<C.length;i++){
+    r.push((C[i-1]>0&&C[i]>0)?Math.log(C[i]/C[i-1]):null);
+  }
+  var out=[];
+  for(i=0;i<C.length;i++){
+    if(i<n){ out.push(null); continue; }
+    var som=0, cpt=0, j;
+    for(j=i-n+1;j<=i;j++){ if(r[j]!=null){ som+=r[j]; cpt++; } }
+    if(cpt<Math.max(5,n*0.6)){ out.push(null); continue; }
+    var moy=som/cpt, v2=0;
+    for(j=i-n+1;j<=i;j++){ if(r[j]!=null) v2+=(r[j]-moy)*(r[j]-moy); }
+    out.push(Math.sqrt(v2/(cpt-1))*Math.sqrt(252)*100);
+  }
+  return out;
+}
 function paintChart(cv,readEl,grand){
   if(!cv) return null;
   var dpr=Math.min(window.devicePixelRatio||1,2);
@@ -2696,22 +2792,36 @@ function paintChart(cv,readEl,grand){
   cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
   if(!grand) cv.style.height=H+"px";
   var g=cv.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0);
-  g.fillStyle="#000"; g.fillRect(0,0,W,H);
+  var PAL=palette(grand);
+  g.fillStyle=PAL.fond; g.fillRect(0,0,W,H);
   var S3=chartSlice(), c=S3.c, t=S3.t, v=S3.v;
   if(!c||c.length<2||CH.sym!==sel){
     g.fillStyle="#6b6458"; g.font="12px 'IBM Plex Mono',monospace";
-    g.fillText("Chargement de l'historique...",12,H/2); return null;
+    g.fillText("Chargement de l'historique...",12,H/2);
+    cv.__snap=null; return null;
   }
   var mmSet = cfg.mm || [];
   var volOn = mmSet.indexOf("vol")>=0 && v && v.some(function(x){return x;});
   var rsiOn = grand && mmSet.indexOf("rsi")>=0;
+  var stoOn = grand && mmSet.indexOf("stoch")>=0;
+  var volaOn = grand && mmSet.indexOf("vola")>=0;
   var bollOn = mmSet.indexOf("boll")>=0;
   var cmp = grand && CMP && CMP.sym && CMP.c && CMP.c.length>2 ? CMP : null;
   var logOn = cfg.log && !cmp && Math.min.apply(null,c)>0;
   var PL=grand?62:46, PR=grand?16:8, PT=grand?16:10, PB=grand?30:18;
   var hVol = volOn ? Math.round((H-PT-PB)*0.15) : 0;
   var hRsi = rsiOn ? Math.round((H-PT-PB)*0.20) : 0;
-  var w=W-PL-PR, h=H-PT-PB-hVol-hRsi;
+  var hSto = stoOn ? Math.round((H-PT-PB)*0.20) : 0;
+  var hVola= volaOn? Math.round((H-PT-PB)*0.18) : 0;
+  /* si l'empilement ne laisse plus de place au cours, on rogne les panneaux */
+  var hBas = hVol+hRsi+hSto+hVola;
+  if(H-PT-PB-hBas < 90){
+    var trop=90-(H-PT-PB-hBas);
+    var rogne=function(x){ var d=Math.min(x,trop); trop-=d; return x-d; };
+    hVola=rogne(hVola); hSto=rogne(hSto); hRsi=rogne(hRsi); hVol=rogne(hVol);
+    hBas=hVol+hRsi+hSto+hVola;
+  }
+  var w=W-PL-PR, h=H-PT-PB-hBas;
   /* en comparaison, tout est ramene en base 100 sur la fenetre affichee */
   var serie=c, cmpSerie=null;
   if(cmp){
@@ -2729,7 +2839,7 @@ function paintChart(cv,readEl,grand){
   if(cmpSerie) cmpSerie.forEach(function(x){ if(x!=null){ if(x<lo)lo=x; if(x>hi)hi=x; } });
   var mms={}, boll=null;
   if(!cmp){
-    mmSet.forEach(function(n){ if(n==="vol"||n==="rsi"||n==="boll") return;
+    mmSet.forEach(function(n){ if(n==="vol"||n==="rsi"||n==="boll"||n==="stoch"||n==="vola") return;
       var full=sma(CH.c,+n).slice(S3.off,S3.off+c.length);
       mms[n]=full;
       full.forEach(function(x){ if(x!=null){ if(x<lo)lo=x; if(x>hi)hi=x; } });
@@ -2752,14 +2862,22 @@ function paintChart(cv,readEl,grand){
     if(logOn && val<=0) val=1e-9;
     return PT+(1-(L(val)-lL)/((hL-lL)||1))*h;
   };
-  g.strokeStyle="#1a1f22"; g.lineWidth=1; g.fillStyle="#6b6458";
+  var quad = grand ? (cfg.grille||"h") : "h";
+  g.strokeStyle=PAL.grille; g.lineWidth=1; g.fillStyle="#6b6458";
   g.font=(grand?"11px":"10px")+" 'IBM Plex Mono',monospace"; g.textAlign="right";
   var nLignes=grand?7:4;
   for(var k=0;k<=nLignes;k++){
     var vv = logOn ? Math.exp(lL+(hL-lL)*k/nLignes) : lo+(hi-lo)*k/nLignes;
     var yy=Math.round(Yv(vv))+0.5;
-    g.beginPath(); g.moveTo(PL,yy); g.lineTo(W-PR,yy); g.stroke();
+    if(quad!=="aucune"){ g.beginPath(); g.moveTo(PL,yy); g.lineTo(W-PR,yy); g.stroke(); }
     g.fillText(fmt(vv,Math.abs(vv)>=100?0:2)+(cmp?"":""), PL-5, yy+3);
+  }
+  if(quad==="complete"){
+    var nV=Math.max(4,Math.min(12,Math.round(w/110)));
+    for(var kv=1;kv<nV;kv++){
+      var xx=Math.round(PL+w*kv/nV)+0.5;
+      g.beginPath(); g.moveTo(xx,PT); g.lineTo(xx,PT+h+hBas); g.stroke();
+    }
   }
   if(volOn){
     var vmax=Math.max.apply(null,v.map(function(x){return x||0;}))||1;
@@ -2786,15 +2904,17 @@ function paintChart(cv,readEl,grand){
     });
   }
   var first=serie[0], last=serie[serie.length-1], up=last>=first;
+  var couleurTrace = PAL.trace || (up?"#00d46a":"#ff3b30");
+  var couleurFill  = PAL.fill  || (up?"rgba(0,212,106,.30)":"rgba(255,59,48,.28)");
   var grd=g.createLinearGradient(0,PT,0,PT+h);
-  grd.addColorStop(0, up?"rgba(0,212,106,.30)":"rgba(255,59,48,.28)");
-  grd.addColorStop(1,"rgba(0,0,0,0)");
+  grd.addColorStop(0, couleurFill);
+  grd.addColorStop(1, PAL.fillBas);
   g.beginPath(); g.moveTo(X(0),Yv(serie[0]));
   for(var i=1;i<serie.length;i++) g.lineTo(X(i),Yv(serie[i]));
   g.lineTo(X(serie.length-1),PT+h); g.lineTo(X(0),PT+h); g.closePath(); g.fillStyle=grd; g.fill();
   g.beginPath(); g.moveTo(X(0),Yv(serie[0]));
   for(var j=1;j<serie.length;j++) g.lineTo(X(j),Yv(serie[j]));
-  g.strokeStyle= up?"#00d46a":"#ff3b30"; g.lineWidth=grand?2:1.6; g.stroke();
+  g.strokeStyle= couleurTrace; g.lineWidth=grand?2:1.6; g.stroke();
   if(cmpSerie){
     g.beginPath(); var dc=false;
     for(var ci2=0;ci2<cmpSerie.length;ci2++){
@@ -2833,8 +2953,60 @@ function paintChart(cv,readEl,grand){
     g.textAlign="right"; g.fillStyle="#6b6458";
     g.fillText("70",PL-5,RY(70)+3); g.fillText("30",PL-5,RY(30)+3);
   }
+  if(stoOn){
+    var ST=stochastique(CH.c,14,3);
+    var K=ST.k.slice(S3.off,S3.off+c.length), Dq=ST.d.slice(S3.off,S3.off+c.length);
+    var sy0=PT+h+hVol+hRsi, sy1=sy0+hSto-6;
+    var SY=function(x){ return sy1-(x/100)*(sy1-sy0); };
+    g.strokeStyle=PAL.grille;
+    [20,50,80].forEach(function(n){
+      var yy=Math.round(SY(n))+0.5;
+      g.beginPath(); g.moveTo(PL,yy); g.lineTo(W-PR,yy); g.stroke();
+    });
+    g.fillStyle="rgba(255,59,48,.08)"; g.fillRect(PL,SY(100),w,SY(80)-SY(100));
+    g.fillStyle="rgba(0,212,106,.08)"; g.fillRect(PL,SY(20),w,SY(0)-SY(20));
+    [[K,"#ffa028",1.4],[Dq,"#4fc3f7",1.2]].forEach(function(par){
+      g.beginPath(); var ds=false;
+      for(var si=0;si<par[0].length;si++){ if(par[0][si]==null) continue;
+        if(!ds){ g.moveTo(X(si),SY(par[0][si])); ds=true; } else g.lineTo(X(si),SY(par[0][si])); }
+      g.strokeStyle=par[1]; g.lineWidth=par[2]; g.stroke();
+    });
+    var dk=null,dd=null;
+    for(var sk=K.length-1;sk>=0;sk--){ if(K[sk]!=null){ dk=K[sk]; break; } }
+    for(var sd=Dq.length-1;sd>=0;sd--){ if(Dq[sd]!=null){ dd=Dq[sd]; break; } }
+    g.textAlign="left"; g.font="10px 'IBM Plex Mono',monospace";
+    g.fillStyle="#ffa028";
+    g.fillText("STOCH 14  %K"+(dk!=null?" "+dk.toFixed(1):""), PL+4, sy0+11);
+    g.fillStyle="#4fc3f7";
+    g.fillText("%D"+(dd!=null?" "+dd.toFixed(1):""), PL+140, sy0+11);
+    g.textAlign="right"; g.fillStyle="#6b6458";
+    g.fillText("80",PL-5,SY(80)+3); g.fillText("20",PL-5,SY(20)+3);
+  }
+  if(volaOn){
+    var fen=+(cfg.volawin||20);
+    var VV=volGlissante(CH.c,fen).slice(S3.off,S3.off+c.length);
+    var dispo=VV.filter(function(x){ return x!=null; });
+    var vy0=PT+h+hVol+hRsi+hSto, vy1=vy0+hVola-6;
+    var vmaxi=dispo.length?Math.max.apply(null,dispo)*1.1:1;
+    var VY=function(x){ return vy1-(x/(vmaxi||1))*(vy1-vy0); };
+    g.strokeStyle=PAL.grille;
+    [0.25,0.5,0.75].forEach(function(f){
+      var yy=Math.round(VY(vmaxi*f))+0.5;
+      g.beginPath(); g.moveTo(PL,yy); g.lineTo(W-PR,yy); g.stroke();
+    });
+    g.beginPath(); var dv2=false;
+    for(var vi=0;vi<VV.length;vi++){ if(VV[vi]==null) continue;
+      if(!dv2){ g.moveTo(X(vi),VY(VV[vi])); dv2=true; } else g.lineTo(X(vi),VY(VV[vi])); }
+    g.strokeStyle="#e0b43a"; g.lineWidth=1.3; g.stroke();
+    var dver=null; for(var vj=VV.length-1;vj>=0;vj--){ if(VV[vj]!=null){ dver=VV[vj]; break; } }
+    g.textAlign="left"; g.fillStyle="#e0b43a"; g.font="10px 'IBM Plex Mono',monospace";
+    g.fillText("VOLATILITE "+fen+" SEANCES, ANNUALISEE"+(dver!=null?"  "+dver.toFixed(1)+"%":""),
+               PL+4, vy0+11);
+    g.textAlign="right"; g.fillStyle="#6b6458";
+    g.fillText(vmaxi.toFixed(0)+"%",PL-5,VY(vmaxi)+9);
+  }
   var ly=Yv(last);
-  g.fillStyle=up?"#00d46a":"#ff3b30";
+  g.fillStyle=couleurTrace;
   g.beginPath(); g.arc(X(c.length-1),ly,grand?3.6:2.8,0,6.284); g.fill();
   g.strokeStyle="#ffa028"; g.setLineDash([3,3]); g.lineWidth=1;
   g.beginPath(); g.moveTo(PL,Math.round(ly)+0.5); g.lineTo(W-PR,Math.round(ly)+0.5); g.stroke(); g.setLineDash([]);
@@ -2861,7 +3033,11 @@ function paintChart(cv,readEl,grand){
     var txt="MM"+n+(der!=null?" "+fmt(der):"");
     g.fillText(txt, lx, PT+(grand?26:22)); lx+=g.measureText(txt).width+12;
   });
-  return {X:X,Yv:Yv,c:c,t:t,v:v,PL:PL,PR:PR,PT:PT,w:w,h:h,H:H,W:W,hVol:hVol+hRsi,readEl:readEl,serie:serie,cmp:cmpSerie};
+  /* on photographie le graphique a l'instant ou il vient d'etre peint :
+     le curseur restaure cette image avant de tracer, sinon les traits
+     s'empilent a chaque mouvement de souris */
+  try{ cv.__snap=g.getImageData(0,0,cv.width,cv.height); }catch(e){ cv.__snap=null; }
+  return {X:X,Yv:Yv,c:c,t:t,v:v,PL:PL,PR:PR,PT:PT,w:w,h:h,H:H,W:W,hVol:hBas,readEl:readEl,serie:serie,cmp:cmpSerie};
 }
 var CTX={}, CTXF={}, CMP=null;
 function drawChart(){ CTX=paintChart($("cv"),$("cv-read"),false)||{}; }
@@ -2892,8 +3068,16 @@ function brancherCurseur(cv,getCtx){
     el.style.left=Math.min(Math.max(px+12,4), r.width-el.offsetWidth-4)+"px";
     el.style.top=Math.max(4, py-el.offsetHeight-10)+"px";
     var g=cv.getContext("2d"), dpr=Math.min(window.devicePixelRatio||1,2);
+    if(cv.__snap){
+      g.setTransform(1,0,0,1,0,0);
+      g.putImageData(cv.__snap,0,0);
+    } else {
+      /* pas de photo utilisable : on repeint le graphique au complet */
+      ctx = (cv.id==="cvfull") ? (CTXF=paintChart(cv,ctx.readEl,true)||{})
+                               : (CTX=paintChart(cv,ctx.readEl,false)||{});
+      if(!ctx||!ctx.c) return;
+    }
     g.setTransform(dpr,0,0,dpr,0,0);
-    if(cv.__snap) g.putImageData(cv.__snap,0,0);
     g.save();
     g.strokeStyle="rgba(255,160,40,.75)"; g.setLineDash([2,3]); g.lineWidth=1;
     g.beginPath(); g.moveTo(px+0.5,ctx.PT); g.lineTo(px+0.5,ctx.PT+ctx.h+ctx.hVol); g.stroke();
@@ -2906,12 +3090,6 @@ function brancherCurseur(cv,getCtx){
     }
     g.restore();
   }
-  function snap(){
-    var ctx=getCtx(); if(!ctx) return;
-    var g=cv.getContext("2d");
-    try{ cv.__snap=g.getImageData(0,0,cv.width,cv.height); }catch(e){ cv.__snap=null; }
-  }
-  cv.addEventListener("mouseenter",function(){ snap(); });
   cv.addEventListener("mousemove",bouge);
   cv.addEventListener("mouseleave",function(){
     var ctx=getCtx(); if(ctx&&ctx.readEl) ctx.readEl.hidden=true;
@@ -3031,6 +3209,26 @@ cfg.mm = cfg.mm || [];
   $("full-close").addEventListener("click",function(){ fermerPleinEcran(); });
   $("f-log").addEventListener("click",function(){ cfg.log=!cfg.log; save(); majBoutonsPlein(); drawFull(); });
   $("f-comp").addEventListener("change",function(){ chargerComparaison(this.value); });
+  (function(){
+    var sls=$("f-cmp-liste");
+    if(sls) sls.addEventListener("change",function(){
+      cfg.cmpliste=sls.value; save();
+      CMP=null; remplirComparateur(); drawFull();
+    });
+    var gr=$("f-grille");
+    if(gr) gr.addEventListener("change",function(){ cfg.grille=gr.value; save(); drawFull(); });
+    var vw=$("f-volawin");
+    if(vw) vw.addEventListener("change",function(){ cfg.volawin=+vw.value; save(); drawFull(); });
+    [["f-col-trace","trace"],["f-col-fond","fond"],["f-col-fill","fill"]].forEach(function(par){
+      var el=$(par[0]);
+      if(el) el.addEventListener("input",function(){ reglePalette(par[1],el.value); });
+    });
+    var raz=$("f-col-raz");
+    if(raz) raz.addEventListener("click",function(){
+      cfg.pal=null; save(); majReglagesPlein(); drawFull();
+      toast("Couleurs d'origine retablies.");
+    });
+  })();
   $("full-ranges").addEventListener("click",function(e){
     var b=e.target.closest("[data-fr]"); if(!b) return;
     cfg.range=b.getAttribute("data-fr"); cfg.zoom=null; save();
@@ -3063,12 +3261,34 @@ function majBoutonsPlein(){
   var lg=$("f-log"); if(lg) lg.setAttribute("aria-pressed", cfg.log?"true":"false");
 }
 function remplirComparateur(){
-  var sl=$("f-comp"); if(!sl) return;
+  var sl=$("f-comp"), sls=$("f-cmp-liste"); if(!sl) return;
+  if(sls){
+    var choix=cfg.cmpliste||cfg.tab;
+    if(TABS.indexOf(choix)<0) choix=cfg.tab;
+    sls.innerHTML=TABS.map(function(t){
+      return '<option value="'+esc(t)+'">'+esc(t)+"</option>"; }).join("");
+    sls.value=choix; cfg.cmpliste=choix;
+  }
+  var tab=(sls&&sls.value)||cfg.tab;
   var av=sl.value;
-  var liste=currentList().filter(function(o){ return !o.nf && o.y!==sel; }).slice(0,80);
+  var liste=(UNIVERSE[tab]||[]).filter(function(o){ return !o.nf && o.y!==sel; }).slice(0,300);
   sl.innerHTML='<option value="">aucun</option>'+
     liste.map(function(o){ return '<option value="'+esc(o.y)+'">'+esc(o.n)+"</option>"; }).join("");
-  sl.value=(CMP&&CMP.sym)||av||"";
+  var voulu=(CMP&&CMP.sym)||av||"";
+  sl.value = liste.some(function(o){ return o.y===voulu; }) ? voulu : "";
+}
+function majReglagesPlein(){
+  var gr=$("f-grille"); if(gr) gr.value=cfg.grille||"h";
+  var vw=$("f-volawin"); if(vw) vw.value=String(cfg.volawin||20);
+  var p=cfg.pal||{};
+  var ct=$("f-col-trace"); if(ct&&p.trace) ct.value=p.trace;
+  var cf=$("f-col-fond");  if(cf) cf.value=p.fond||"#000000";
+  var cr=$("f-col-fill");  if(cr&&p.fill) cr.value=p.fill;
+}
+function reglePalette(cle,val){
+  cfg.pal=cfg.pal||{};
+  if(val==null) delete cfg.pal[cle]; else cfg.pal[cle]=val;
+  save(); drawFull();
 }
 function chargerComparaison(y){
   if(!y){ CMP=null; drawFull(); return; }
@@ -3087,7 +3307,7 @@ function ouvrirPleinEcran(){
   var o=SYMS[sel]||{};
   $("full-title").textContent=(o.n||sel||"")+"   "+(sel||"")+"   "+cfg.range.toUpperCase();
   $("fullwrap").hidden=false;
-  majBoutonsPlein(); remplirComparateur();
+  majBoutonsPlein(); remplirComparateur(); majReglagesPlein();
   setTimeout(function(){ drawFull(); },30);
 }
 function fermerPleinEcran(){ $("fullwrap").hidden=true; CUR=null; }
