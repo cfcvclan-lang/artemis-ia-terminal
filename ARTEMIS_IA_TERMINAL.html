@@ -343,6 +343,26 @@ table.sc tbody tr:hover{background:#15110a}
 .calperso input[type=date]{width:140px}
 .calperso input[type=text]{min-width:230px;flex:1 1 230px}
 .tvbox{min-height:120px}
+/* ---------- F5 : taux a la carte ---------- */
+table.sc.tx td:first-child{max-width:none}
+.txdel{background:none;border:none;color:var(--fg-dim);cursor:pointer;font-size:13px;line-height:1;padding:0 4px}
+.txdel:hover{color:var(--down)}
+.txgrp{margin-bottom:9px}
+.txgrp b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:4px;font-weight:500}
+.txopt{margin:0 5px 5px 0;font-size:10.5px}
+.txopt[disabled]{opacity:.45;cursor:default;border-color:var(--grid)}
+.txlibre{border-top:1px solid var(--grid);padding-top:9px;margin-top:4px}
+.txlibre>b{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:6px;font-weight:500}
+.txrow{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.txrow input,.txrow select{background:#05070a;border:1px solid var(--grid2);color:var(--fg);
+  padding:4px 8px;border-radius:2px;font:inherit;font-size:11.5px}
+.txrow #tx-code{min-width:280px;flex:1 1 280px}
+.txrow #tx-lib{min-width:150px}
+.txrow #tx-ans{width:150px}
+.txrow #tx-tv{min-width:190px}
+#tx-curve{display:block;width:100%}
 .tvbox .tradingview-widget-container{min-height:100px}
 .tvnote{font-size:10.5px;color:var(--fg-dim);margin-top:6px;line-height:1.6}
 .tvnote b{color:var(--amber-soft);font-weight:500}
@@ -1411,22 +1431,255 @@ function renderCharts(){
       '<span class="ft"><span>'+(nf?"non cote":esc(y))+'</span><span class="tnum">'+(nf?"\u2013":fmt(r.q.p))+"</span></span></button>";
   }).join("")||'<div class="empty">Aucun sous-jacent.</div>';
 }
-/* ---------- vue TAUX ---------- */
-var RATES=null, ratesLoading=false;
-var SENSI=[["TLT","US Treasury 20 ans et plus"],["IEF","US Treasury 7-10 ans"],["SHY","US Treasury 1-3 ans"],
-           ["LQD","Credit US investment grade"],["HYG","Credit US haut rendement"],["TIP","US indexe inflation"],
-           ["^SX7E","Banques zone euro"],["EURUSD=X","EUR/USD"]];
-function loadRates(){
-  if(ratesLoading) return;
-  if(RATES && Date.now()-RATES.at<1800000){ renderRates(); return; }
-  ratesLoading=true;
-  var url=(cfg.base||"").replace(/\/$/,"")+"/api/rates";
-  jget(url,45000).then(function(j){ RATES={d:j,at:Date.now()}; })
-    .catch(function(e){ RATES={err:(e&&e.message)||"indisponible",at:Date.now()}; })
-    .then(function(){ ratesLoading=false; renderRates(); });
-  probe(SENSI.map(function(x){return x[0];})).then(function(q){ applyQuotes(q); renderRates(); }).catch(function(){});
+/* ---------- F5 : taux a la carte ---------- */
+/* Chaque ligne porte sa source. Yahoo cote en continu, la BCE et la
+   Bundesbank publient des releves officiels, TradingView n'affiche qu'un
+   graphique sans valeur lisible par la page. Le badge le dit a chaque fois. */
+var TAUX=null, tauxCharge=false, TV_POSE=false;
+
+var CATALOGUE=[
+ {g:"Etats-Unis, cotes en continu", l:[
+   {lib:"Etats-Unis 3 mois", src:"yahoo", code:"^IRX", ans:0.25, tv:"TVC:US03M", fam:"etatsunis", role:"us3m"},
+   {lib:"Etats-Unis 5 ans",  src:"yahoo", code:"^FVX", ans:5,    tv:"TVC:US05Y", fam:"etatsunis"},
+   {lib:"Etats-Unis 10 ans", src:"yahoo", code:"^TNX", ans:10,   tv:"TVC:US10Y", fam:"etatsunis", role:"us10"},
+   {lib:"Etats-Unis 30 ans", src:"yahoo", code:"^TYX", ans:30,   tv:"TVC:US30Y", fam:"etatsunis"},
+   {lib:"Etats-Unis 2 ans",  src:"tv",    code:"TVC:US02Y", ans:2, tv:"TVC:US02Y", fam:"etatsunis"}]},
+ {g:"Courbe allemande, releve quotidien", l:[
+   {lib:"Allemagne 1 an",   src:"bbk", code:"D.I.ZST.ZI.EUR.S1311.B.A604.R01XX.R.A.A._Z._Z.A", ans:1,  fam:"allemagne"},
+   {lib:"Allemagne 2 ans",  src:"bbk", code:"D.I.ZST.ZI.EUR.S1311.B.A604.R02XX.R.A.A._Z._Z.A", ans:2,  tv:"TVC:DE02Y", fam:"allemagne"},
+   {lib:"Allemagne 5 ans",  src:"bbk", code:"D.I.ZST.ZI.EUR.S1311.B.A604.R05XX.R.A.A._Z._Z.A", ans:5,  tv:"TVC:DE05Y", fam:"allemagne"},
+   {lib:"Allemagne 10 ans", src:"bbk", code:"D.I.ZST.ZI.EUR.S1311.B.A604.R10XX.R.A.A._Z._Z.A", ans:10, tv:"TVC:DE10Y", fam:"allemagne", role:"de10d"},
+   {lib:"Allemagne 30 ans", src:"bbk", code:"D.I.ZST.ZI.EUR.S1311.B.A604.R30XX.R.A.A._Z._Z.A", ans:30, tv:"TVC:DE30Y", fam:"allemagne"}]},
+ {g:"Taux courts zone euro", l:[
+   {lib:"€STR",            src:"ecb", code:"EST/B.EU000A2X2A25.WT",               ans:0.003, fam:"court"},
+   {lib:"Euribor 1 mois",  src:"ecb", code:"FM/D.U2.EUR.RT.MM.EURIBOR1MD_.HSTA",  ans:0.08,  fam:"court"},
+   {lib:"Euribor 3 mois",  src:"ecb", code:"FM/M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA",  ans:0.25,  fam:"court", role:"eur3m"},
+   {lib:"Euribor 6 mois",  src:"ecb", code:"FM/M.U2.EUR.RT.MM.EURIBOR6MD_.HSTA",  ans:0.5,   fam:"court"},
+   {lib:"Euribor 12 mois", src:"ecb", code:"FM/M.U2.EUR.RT.MM.EURIBOR1YD_.HSTA",  ans:1,     fam:"court"}]},
+ {g:"Courbe zone euro, releve quotidien", l:[
+   {lib:"Courbe AAA 1 an",   src:"ecb", code:"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y",  ans:1,  fam:"courbe"},
+   {lib:"Courbe AAA 2 ans",  src:"ecb", code:"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_2Y",  ans:2,  fam:"courbe", role:"eur2"},
+   {lib:"Courbe AAA 5 ans",  src:"ecb", code:"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_5Y",  ans:5,  fam:"courbe"},
+   {lib:"Courbe AAA 10 ans", src:"ecb", code:"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y", ans:10, fam:"courbe", role:"eur10"},
+   {lib:"Courbe AAA 30 ans", src:"ecb", code:"YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_30Y", ans:30, fam:"courbe"},
+   {lib:"Toutes notations 10 ans", src:"ecb", code:"YC/B.U2.EUR.4F.G_N_C.SV_C_YM.SR_10Y", ans:10, fam:"courbe", role:"eurall10"}]},
+ {g:"Souverains 10 ans, moyennes mensuelles", l:[
+   {lib:"France 10 ans",    src:"ecb", code:"IRS/M.FR.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:FR10Y", fam:"souverain", role:"fr10"},
+   {lib:"Allemagne 10 ans", src:"ecb", code:"IRS/M.DE.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:DE10Y", fam:"souverain", role:"de10"},
+   {lib:"Italie 10 ans",    src:"ecb", code:"IRS/M.IT.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:IT10Y", fam:"souverain"},
+   {lib:"Espagne 10 ans",   src:"ecb", code:"IRS/M.ES.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:ES10Y", fam:"souverain"}]},
+ {g:"Graphique seul, aucune valeur publiee en libre", l:[
+   {lib:"France 2 ans",      src:"tv", code:"TVC:FR02Y", ans:2,  tv:"TVC:FR02Y", fam:"graphique"},
+   {lib:"France 5 ans",      src:"tv", code:"TVC:FR05Y", ans:5,  tv:"TVC:FR05Y", fam:"graphique"},
+   {lib:"Zone euro 10 ans",  src:"tv", code:"TVC:EU10Y", ans:10, tv:"TVC:EU10Y", fam:"graphique"},
+   {lib:"Royaume-Uni 10 ans",src:"tv", code:"TVC:GB10Y", ans:10, tv:"TVC:GB10Y", fam:"graphique"},
+   {lib:"Royaume-Uni 2 ans", src:"tv", code:"TVC:GB02Y", ans:2,  tv:"TVC:GB02Y", fam:"graphique"},
+   {lib:"Japon 10 ans",      src:"tv", code:"TVC:JP10Y", ans:10, tv:"TVC:JP10Y", fam:"graphique"}]}
+];
+var FAMILLES={etatsunis:"Etats-Unis, cotes en continu", allemagne:"Courbe allemande, releve quotidien",
+  court:"Taux courts zone euro", courbe:"Courbe zone euro, releve quotidien",
+  souverain:"Souverains 10 ans, moyennes mensuelles", graphique:"Graphique seul",
+  perso:"Mes ajouts"};
+
+function cleTaux(e){ return e.src+"~"+e.code; }
+function tauxDefaut(){
+  var out=[];
+  CATALOGUE.forEach(function(g){ g.l.forEach(function(e){ if(e.fam!=="graphique") out.push(e); }); });
+  return out;
+}
+function listeTaux(){
+  if(!cfg.taux || !cfg.taux.length) cfg.taux=tauxDefaut().map(function(e){ return JSON.parse(JSON.stringify(e)); });
+  return cfg.taux;
+}
+function specTaux(){
+  return listeTaux().map(function(e){ return e.src+"~"+e.code+"~"+(e.ans!=null?e.ans:""); }).join("|");
+}
+function loadTaux(force){
+  var el=$("ratesview");
+  var cle=specTaux();
+  if(tauxCharge) return;
+  if(!force && TAUX && TAUX.cle===cle && Date.now()-TAUX.at<600000){ renderTaux(); return; }
+  tauxCharge=true;
+  if(el && (!TAUX||TAUX.cle!==cle)) el.innerHTML='<div class="empty">Chargement des taux...</div>';
+  var base=(cfg.base||"").replace(/\/$/,"");
+  jget(base+"/api/taux?s="+encodeURIComponent(cle),45000)
+    .then(function(j){ TAUX={d:j,at:Date.now(),cle:cle}; })
+    .catch(function(e){ TAUX={err:(e&&e.message)||"indisponible",at:Date.now(),cle:cle}; })
+    .then(function(){ tauxCharge=false; renderTaux(); });
 }
 function bp(v){ return v==null||!isFinite(v)?"--":(v>0?"+":"")+v.toFixed(0)+" pb"; }
+function parRole(){
+  var m={}, d=(TAUX&&TAUX.d&&TAUX.d.lignes)||[];
+  listeTaux().forEach(function(e,i){
+    if(!e.role) return;
+    var r=d[i]; if(r&&r.v!=null) m[e.role]=r.v;
+  });
+  return m;
+}
+function badgeFreq(f){
+  var k={continu:["live","CONTINU"],quotidien:["jour","QUOTIDIEN"],
+         mensuel:["mois","MENSUEL"],graphique:["mois","GRAPHIQUE"]}[f||""];
+  if(!k) return '<span class="freq mois">--</span>';
+  return '<span class="freq '+k[0]+'">'+k[1]+"</span>";
+}
+function retirerTaux(i){
+  var l=listeTaux();
+  if(i<0||i>=l.length) return;
+  var nom=l[i].lib;
+  l.splice(i,1); save(); TAUX=null; loadTaux(true);
+  toast(nom+" retire du F5.");
+}
+function ajouterTaux(e){
+  var l=listeTaux();
+  if(l.some(function(x){ return cleTaux(x)===cleTaux(e); })){ toast(e.lib+" est deja dans la liste."); return false; }
+  l.push(JSON.parse(JSON.stringify(e))); save(); TAUX=null; loadTaux(true);
+  return true;
+}
+function renderTaux(){
+  var el=$("ratesview"); if(!el) return;
+  var barre='<div class="calbar">'+
+    '<button class="fk" type="button" id="tx-add">+ TAUX</button>'+
+    '<button class="fk" type="button" id="tx-reset">LISTE PAR DEFAUT</button>'+
+    '<span class="spacer" style="flex:1 1 auto"></span>'+
+    '<span class="flat" style="font-size:10.5px">'+listeTaux().length+" lignes</span>"+
+    '<button class="fk" type="button" id="tx-reload">ACTUALISER</button></div>';
+  if(TAUX&&TAUX.err){
+    el.innerHTML=barre+'<div class="empty">Taux indisponibles ('+esc(TAUX.err)+').</div>';
+    brancherTaux(); return;
+  }
+  if(!TAUX){ el.innerHTML=barre+'<div class="empty">Chargement des taux...</div>'; brancherTaux(); return; }
+  var L=listeTaux(), D=TAUX.d.lignes||[];
+  var R=parRole();
+  var pente=(R.eur10!=null&&R.eur2!=null)?(R.eur10-R.eur2)*100:null;
+  var penteUS=(R.us10!=null&&R.us3m!=null)?(R.us10-R.us3m)*100:null;
+  var spreadNot=(R.eurall10!=null&&R.eur10!=null)?(R.eurall10-R.eur10)*100:null;
+  var oat=(R.fr10!=null&&R.de10!=null)?(R.fr10-R.de10)*100:null;
+  function tile(t,v,c,sub){ return '<div class="stat"><b>'+t+'</b><i class="'+(c||"")+'">'+v+"</i>"+
+    (sub?'<b style="letter-spacing:.04em;text-transform:none">'+esc(sub)+"</b>":"")+"</div>"; }
+  var tuiles='<div class="stats">'+
+    tile("PENTE 2A-10A ZONE EURO", bp(pente), cls(pente), "courbe AAA")+
+    tile("PENTE 3M-10A ETATS-UNIS", bp(penteUS), cls(penteUS), "")+
+    tile("PRIME TOUTES NOTATIONS", bp(spreadNot), spreadNot>0?"down":"up", "10 ans contre AAA")+
+    tile("ECART FRANCE-ALLEMAGNE", bp(oat), oat>0?"down":"up", "10 ans, moyennes mensuelles")+
+    tile("ALLEMAGNE 10 ANS", R.de10d!=null?R.de10d.toFixed(3)+"%":"--", "", "releve quotidien")+
+    tile("EURIBOR 3 MOIS", R.eur3m!=null?R.eur3m.toFixed(3)+"%":"--", "", "moyenne mensuelle")+
+    "</div>";
+
+  var fams=[];
+  L.forEach(function(e){ var f=e.fam||"perso"; if(fams.indexOf(f)<0) fams.push(f); });
+  var corps=fams.map(function(f){
+    var lignes=[];
+    L.forEach(function(e,i){
+      if((e.fam||"perso")!==f) return;
+      var r=D[i]||{};
+      var droite;
+      if(r.err) droite='<td class="flat" colspan="5">'+esc(r.err)+"</td>";
+      else if(r.v==null) droite='<td class="flat" colspan="5">graphique uniquement, aucune valeur publiee</td>';
+      else droite='<td class="tnum">'+r.v.toFixed(3)+"%</td>"+
+        '<td class="tnum '+cls(r.d)+'">'+bp(r.d)+"</td>"+
+        '<td class="tnum '+cls(r.w)+'">'+bp(r.w)+"</td>"+
+        '<td class="tnum '+cls(r.m)+'">'+bp(r.m)+"</td>"+
+        '<td class="tnum flat">'+esc(r.date||"")+"</td>";
+      lignes.push('<tr data-i="'+i+'"><td'+
+        (e.tv?' title="Suivi en continu dans le panneau TradingView, symbole '+esc(e.tv)+'"':"")+'>'+
+        esc(e.lib)+" "+badgeFreq(r.freq)+
+        (e.tv?' <span class="flat" style="font-size:9.5px">●</span>':"")+
+        '</td>'+droite+'<td><button class="txdel" type="button" data-del="'+i+'" title="Retirer">&times;</button></td></tr>');
+    });
+    return '<div class="crpan"><h4>'+esc(FAMILLES[f]||f)+"</h4>"+
+      '<table class="sc tx"><thead><tr><th>SERIE</th><th>NIVEAU</th><th>JOUR</th><th>1 SEM</th>'+
+      "<th>1 MOIS</th><th>ARRETE</th><th></th></tr></thead><tbody>"+lignes.join("")+"</tbody></table></div>";
+  }).join("");
+  /* courbe reconstruite a partir des lignes qui portent une echeance */
+  var courbes=[];
+  function pts(fam){
+    var p=[];
+    L.forEach(function(e,i){ if((e.fam||"")!==fam||e.ans==null) return;
+      var r=D[i]; if(r&&r.v!=null) p.push({t:+e.ans, v:r.v}); });
+    return p;
+  }
+  [["courbe","#ffa028","Zone euro AAA"],["allemagne","#4fc3f7","Allemagne"],
+   ["etatsunis","#00d46a","Etats-Unis"]].forEach(function(c){
+    var p=pts(c[0]); if(p.length>1) courbes.push({pts:p,col:c[1],nom:c[2]});
+  });
+  var bloccourbe='<div class="crpan"><h4>Courbes</h4><canvas id="tx-curve"></canvas>'+
+    '<div class="crlg">'+courbes.map(function(c){
+      return '<span><b style="color:'+c.col+'">&#9632;</b> '+esc(c.nom)+"</span>"; }).join("")+
+    (courbes.length?"":'<span>Ajoutez au moins deux echeances d\'une meme famille pour tracer une courbe.</span>')+
+    "</div></div>";
+
+  var bloctv='<div class="crpan"><h4>En continu, graphiques TradingView</h4>'+
+    '<div class="tvbox" id="tv-taux"></div></div>';
+
+  el.innerHTML=barre+'<div class="crwrap">'+tuiles+corps+bloccourbe+bloctv+
+    '<div class="lgd flat" style="padding:0 2px 14px">CONTINU : cote en direct. '+
+    'QUOTIDIEN : releve officiel de la veille, BCE ou Bundesbank. MENSUEL : moyenne du mois publiee par la BCE. '+
+    'GRAPHIQUE : aucune valeur publiee en libre, seul le trace TradingView est disponible. '+
+    'Le point apres le badge signale les lignes reprises dans le panneau TradingView en bas de page.</div></div>';
+  drawCurve($("tx-curve"),courbes);
+  TV_POSE=false;
+  poserTradingView();
+  brancherTaux();
+}
+function brancherTaux(){
+  var el=$("ratesview"); if(!el) return;
+  var r=$("tx-reload"); if(r) r.addEventListener("click",function(){ loadTaux(true); });
+  var a=$("tx-add");    if(a) a.addEventListener("click",ouvrirCatalogue);
+  var z=$("tx-reset");  if(z) z.addEventListener("click",function(){
+    if(!confirm("Revenir a la liste de taux livree ? Vos ajouts seront perdus.")) return;
+    cfg.taux=null; save(); TAUX=null; loadTaux(true);
+  });
+  el.querySelectorAll("[data-del]").forEach(function(b){
+    b.addEventListener("click",function(ev){ ev.stopPropagation(); retirerTaux(+b.getAttribute("data-del")); });
+  });
+}
+function ouvrirCatalogue(){
+  var el=$("ratesview"); if(!el) return;
+  if($("txcat")) { $("txcat").remove(); return; }
+  var deja2={}; listeTaux().forEach(function(e){ deja2[cleTaux(e)]=1; });
+  var w=document.createElement("div");
+  w.className="crpan"; w.id="txcat";
+  w.innerHTML='<h4>Ajouter un taux</h4>'+
+    CATALOGUE.map(function(g){
+      return '<div class="txgrp"><b>'+esc(g.g)+"</b>"+g.l.map(function(e){
+        var k=cleTaux(e);
+        return '<button class="fk txopt" type="button" data-cat="'+esc(k)+'"'+
+          (deja2[k]?' disabled aria-pressed="true"':"")+'>'+esc(e.lib)+(deja2[k]?" ✓":"")+"</button>";
+      }).join("")+"</div>";
+    }).join("")+
+    '<div class="txlibre"><b>Ou saisir une serie</b>'+
+      '<div class="txrow">'+
+        '<select id="tx-src"><option value="ecb">BCE</option><option value="bbk">BUNDESBANK</option>'+
+        '<option value="yahoo">YAHOO</option><option value="tv">TRADINGVIEW</option></select>'+
+        '<input id="tx-code" type="text" placeholder="YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_7Y">'+
+        '<input id="tx-lib" type="text" placeholder="Nom affiche" maxlength="40">'+
+        '<input id="tx-ans" type="text" inputmode="decimal" placeholder="echeance en annees">'+
+        '<input id="tx-tv" type="text" placeholder="symbole TradingView, facultatif" maxlength="30">'+
+        '<button class="fk" type="button" id="tx-go">AJOUTER</button>'+
+      "</div>"+
+      '<div class="lgd flat">BCE : flux/cle, par exemple YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_7Y. '+
+      'Bundesbank : la cle BBSIS. Yahoo : le ticker, par exemple ^TNX. '+
+      'TradingView : le symbole, par exemple TVC:GB30Y, graphique seul. '+
+      'Si le code est faux, la ligne s\'affiche avec le message d\'erreur de la source.</div>'+
+    "</div>";
+  el.querySelector(".crwrap").insertAdjacentElement("afterbegin",w);
+  w.querySelectorAll("[data-cat]").forEach(function(b){
+    b.addEventListener("click",function(){
+      var k=b.getAttribute("data-cat"), trouve=null;
+      CATALOGUE.forEach(function(g){ g.l.forEach(function(e){ if(cleTaux(e)===k) trouve=e; }); });
+      if(trouve&&ajouterTaux(trouve)) toast(trouve.lib+" ajoute.");
+    });
+  });
+  w.querySelector("#tx-go").addEventListener("click",function(){
+    var src=$("tx-src").value, code=$("tx-code").value.trim(), lib=$("tx-lib").value.trim();
+    var ans=parseFloat(String($("tx-ans").value).replace(",","."));
+    var tv=$("tx-tv").value.trim();
+    if(!code){ toast("Indiquez le code de la serie."); return; }
+    ajouterTaux({lib:lib||code, src:src, code:code, ans:isFinite(ans)?ans:null,
+                 tv:tv||(src==="tv"?code:""), fam:"perso"});
+  });
+}
+
 function drawCurve(cv,courbes){
   if(!cv) return;
   var dpr=Math.min(window.devicePixelRatio||1,2);
@@ -1503,127 +1756,26 @@ function poserTradingView(){
       'Un bloqueur de publicite ou une extension de confidentialite peut en etre la cause : '+
       's3.tradingview.com doit etre autorise. Les niveaux calcules plus bas restent disponibles.</div>');
   },7000);
+  /* la grille reprend exactement les lignes du F5 qui portent un symbole */
+  var groupes={}, ordre=[];
+  listeTaux().forEach(function(e){
+    if(!e.tv) return;
+    var f=FAMILLES[e.fam||"perso"]||"Taux";
+    if(!groupes[f]){ groupes[f]=[]; ordre.push(f); }
+    if(!groupes[f].some(function(x){ return x.name===e.tv; }))
+      groupes[f].push({name:e.tv, displayName:e.lib});
+  });
+  if(!ordre.length){
+    hote.innerHTML='<div class="tvnote">Aucune ligne de votre liste ne porte de symbole TradingView. '+
+      'Ajoutez-en un depuis le bouton <b>+ TAUX</b>, colonne de droite du formulaire de saisie.</div>';
+    return;
+  }
   tvWidget(hote,"embed-widget-market-quotes.js",{
-    width:"100%", height:420, colorTheme:"dark", isTransparent:true, locale:"fr",
-    symbolsGroups:[
-      {name:"Souverains 10 ans", originalName:"10Y",
-       symbols:[{name:"TVC:FR10Y",displayName:"France 10 ans"},
-                {name:"TVC:DE10Y",displayName:"Allemagne 10 ans"},
-                {name:"TVC:IT10Y",displayName:"Italie 10 ans"},
-                {name:"TVC:ES10Y",displayName:"Espagne 10 ans"},
-                {name:"TVC:GB10Y",displayName:"Royaume-Uni 10 ans"},
-                {name:"TVC:US10Y",displayName:"Etats-Unis 10 ans"},
-                {name:"TVC:JP10Y",displayName:"Japon 10 ans"}]},
-      {name:"Taux courts", originalName:"2Y",
-       symbols:[{name:"TVC:FR02Y",displayName:"France 2 ans"},
-                {name:"TVC:DE02Y",displayName:"Allemagne 2 ans"},
-                {name:"TVC:GB02Y",displayName:"Royaume-Uni 2 ans"},
-                {name:"TVC:US02Y",displayName:"Etats-Unis 2 ans"}]},
-      {name:"Autres echeances", originalName:"long",
-       symbols:[{name:"TVC:FR05Y",displayName:"France 5 ans"},
-                {name:"TVC:DE30Y",displayName:"Allemagne 30 ans"},
-                {name:"TVC:US05Y",displayName:"Etats-Unis 5 ans"},
-                {name:"TVC:US30Y",displayName:"Etats-Unis 30 ans"},
-                {name:"TVC:EU10Y",displayName:"Zone euro 10 ans"}]}
-    ]
+    width:"100%", height:Math.min(520,150+ordre.length*60), colorTheme:"dark",
+    isTransparent:true, locale:"fr",
+    symbolsGroups:ordre.map(function(f){ return {name:f, originalName:f, symbols:groupes[f]}; })
   });
 }
-function renderRates(){
-  var el=$("ratesview"); if(!el) return;
-  if(!RATES){ el.innerHTML='<div class="empty">Chargement des taux...</div>'; return; }
-  if(RATES.err){ el.innerHTML='<div class="empty">Taux indisponibles ('+esc(RATES.err)+
-    ').<br>La source BCE n\'a pas repondu.</div>'; return; }
-  var S2=RATES.d.series||{};
-  function V(c){ var x=S2[c]; return x&&x.v!=null?x.v:null; }
-  var pente=(V("EUR_AAA_10Y")!=null&&V("EUR_AAA_2Y")!=null)?(V("EUR_AAA_10Y")-V("EUR_AAA_2Y"))*100:null;
-  var penteUS=(V("US_10Y")!=null&&V("US_3M")!=null)?(V("US_10Y")-V("US_3M"))*100:null;
-  var spreadNot=(V("EUR_ALL_10Y")!=null&&V("EUR_AAA_10Y")!=null)?(V("EUR_ALL_10Y")-V("EUR_AAA_10Y"))*100:null;
-  var oat=(V("FR_10Y")!=null&&V("DE_10Y_M")!=null)?(V("FR_10Y")-V("DE_10Y_M"))*100:null;
-  function tile(t,v,c,sub){ return '<div class="stat"><b>'+t+'</b><i class="'+(c||"")+'">'+v+"</i>"+
-    (sub?'<b style="letter-spacing:.04em;text-transform:none">'+esc(sub)+"</b>":"")+"</div>"; }
-  var tuiles='<div class="stats">'+
-    tile("PENTE 2A-10A ZONE EURO", bp(pente), cls(pente), "courbe AAA")+
-    tile("PENTE 3M-10A ETATS-UNIS", bp(penteUS), cls(penteUS), "")+
-    tile("PRIME TOUTES NOTATIONS", bp(spreadNot), spreadNot>0?"down":"up", "10 ans contre AAA")+
-    tile("ECART FRANCE-ALLEMAGNE", bp(oat), oat>0?"down":"up", "10 ans, moyennes mensuelles")+
-    tile("ALLEMAGNE 10 ANS", V("DE_10Y")!=null?V("DE_10Y").toFixed(3)+"%":"--", "", "quotidien "+((S2.DE_10Y||{}).date||""))+
-    tile("EURIBOR 3 MOIS", V("EURIBOR3M")!=null?V("EURIBOR3M").toFixed(3)+"%":"--", "", "mensuel "+((S2.EURIBOR3M||{}).date||""))+
-    "</div>";
-
-  var ordre=[["etatsunis","Etats-Unis, en continu"],
-             ["allemagne","Allemagne, releve quotidien"],
-             ["court","Taux courts zone euro"],
-             ["courbe","Courbe zone euro, releve quotidien"],
-             ["souverain","Souverains 10 ans, moyennes mensuelles"]];
-  function etiq(r){
-    var f=r.freq||"";
-    var k=f==="intraday"?"live":(f==="quotidien"?"jour":"mois");
-    var t=f==="intraday"?"CONTINU":(f==="quotidien"?"QUOTIDIEN":"MENSUEL");
-    return '<span class="freq '+k+'">'+t+"</span>";
-  }
-  var corps=ordre.map(function(f){
-    var lignes=Object.keys(S2).filter(function(k){ return S2[k].famille===f[0]; }).map(function(k){
-      var r=S2[k];
-      if(r.err) return "<tr><td>"+esc(r.label)+'</td><td class="flat" colspan="6">source indisponible</td></tr>';
-      return "<tr><td>"+esc(r.label)+" "+etiq(r)+'</td><td class="tnum">'+r.v.toFixed(3)+"%</td>"+
-        '<td class="tnum '+cls(r.d)+'">'+bp(r.d)+"</td>"+
-        '<td class="tnum '+cls(r.w)+'">'+bp(r.w)+"</td>"+
-        '<td class="tnum '+cls(r.m)+'">'+bp(r.m)+"</td>"+
-        '<td class="tnum '+cls(r.ytd)+'">'+bp(r.ytd)+"</td>"+
-        '<td class="flat">'+esc(r.date||"")+" "+esc(r.src||"")+"</td></tr>";
-    }).join("");
-    return '<tr class="fam"><td colspan="7">'+esc(f[1])+"</td></tr>"+lignes;
-  }).join("");
-
-  var sensi=SENSI.map(function(x){
-    var q=Q[x[0]]||{};
-    return "<tr><td>"+esc(x[1])+'</td><td class="tnum">'+fmt(q.p)+"</td>"+
-      '<td class="tnum '+cls(q.pct)+'" colspan="2">'+pct(q.pct)+"</td>"+
-      '<td class="flat" colspan="3">'+esc(x[0])+"</td></tr>";
-  }).join("");
-
-  el.innerHTML=tuiles+
-    '<div class="curvewrap">'+
-      '<div class="panel" style="grid-column:1/-1"><h4>Taux souverains en direct</h4>'+
-        '<div class="tvbox" id="tv-taux"></div>'+
-        '<div class="tvnote">Source <b>TradingView</b>, cotations en direct ou legerement differees selon la place. '+
-        'C\'est le seul acces gratuit aux souverains francais, italien et espagnol en continu. '+
-        'Ces valeurs sont affichees telles quelles : elles ne sont pas lisibles par la page, donc elles n\'alimentent '+
-        'ni les ecarts calcules ci-dessous, ni le moniteur.</div></div>'+
-      '<div class="panel"><h4>Courbes des taux</h4><canvas id="cv-curve" height="300"></canvas>'+
-        '<div class="lgd"><span><s style="background:#ffa028"></s><b>Zone euro AAA</b></span>'+
-        '<span><s style="background:#00d46a"></s><b>Allemagne</b></span>'+
-        '<span><s style="background:#4fc3f7"></s><b>Etats-Unis</b></span>'+
-        '<span class="flat">Echelle des echeances en racine carree.</span></div></div>'+
-      '<div class="panel"><h4>Niveaux et variations</h4>'+
-        '<table class="rt"><thead><tr><th>SERIE</th><th>NIVEAU</th><th>JOUR</th><th>1 SEM</th>'+
-        '<th>1 MOIS</th><th>YTD</th><th>RELEVE</th></tr></thead><tbody>'+corps+"</tbody></table></div>"+
-      '<div class="panel"><h4>Sensibilite aux taux</h4>'+
-        '<table class="rt"><thead><tr><th>INSTRUMENT</th><th>DERN.</th><th colspan="2">JOUR</th>'+
-        '<th colspan="3">CODE</th></tr></thead><tbody>'+sensi+"</tbody></table>"+
-        '<div class="lgd flat">Trackers obligataires et proxys de duration, cotes en continu.</div></div>'+
-      '<div class="panel"><h4>Fraicheur des sources</h4><div class="lgd" style="display:block;line-height:1.7">'+
-        '<div><span class="freq live">CONTINU</span> Etats-Unis, cote en seance chez Yahoo.</div>'+
-        '<div><span class="freq jour">QUOTIDIEN</span> Allemagne (Bundesbank, jour meme), courbe zone euro et '+
-        'taux directeurs (BCE, veille au soir).</div>'+
-        '<div><span class="freq mois">MENSUEL</span> Euribor, France, Italie, Espagne : ce sont des moyennes '+
-        'mensuelles, seule frequence publiee librement par la BCE. Ne pas les lire comme des niveaux du jour.</div>'+
-        '<div class="flat" style="margin-top:6px">Les CMS 2 et 10 ans ne sont diffuses par aucune source gratuite. '+
-        'La courbe souveraine AAA en est le substitut le plus proche.</div>'+
-      "</div></div>"+
-    "</div>";
-
-  var eur=[], us=[], de=[];
-  [["EUR_AAA_1Y",1],["EUR_AAA_2Y",2],["EUR_AAA_5Y",5],["EUR_AAA_10Y",10],["EUR_AAA_30Y",30]].forEach(function(x){
-    if(V(x[0])!=null) eur.push({t:x[1],v:V(x[0])}); });
-  [["DE_1Y",1],["DE_2Y",2],["DE_5Y",5],["DE_10Y",10],["DE_30Y",30]].forEach(function(x){
-    if(V(x[0])!=null) de.push({t:x[1],v:V(x[0])}); });
-  [["US_3M",0.25],["US_5Y",5],["US_10Y",10],["US_30Y",30]].forEach(function(x){
-    if(V(x[0])!=null) us.push({t:x[1],v:V(x[0])}); });
-  drawCurve($("cv-curve"),[{pts:eur,col:"#ffa028"},{pts:de,col:"#00d46a"},{pts:us,col:"#4fc3f7"}]);
-  poserTradingView();
-}
-
 /* ---------- vue NEWS ---------- */
 var NEWS=null, newsLoading=false, NEWSVAL=null;
 function newsTerms(){
@@ -2274,7 +2426,7 @@ function renderAll(){
   if(cfg.view==="heat") renderHeat();
   else if(cfg.view==="charts") renderCharts();
   else if(cfg.view==="perf") renderPerfView();
-  else if(cfg.view==="rates") loadRates();
+  else if(cfg.view==="rates") loadTaux();
   else if(cfg.view==="news") loadNews();
   else if(cfg.view==="scan"){ renderScan(); chaufferScanner(); }
   else if(cfg.view==="cal") loadCal();
@@ -2966,7 +3118,7 @@ document.addEventListener("keydown",function(e){
   if(map[e.key]){ e.preventDefault(); var b=document.querySelector('.fk[data-view="'+map[e.key]+'"]'); if(b) b.click(); }
   if(e.key==="/"){ e.preventDefault(); $("q").focus(); }
 });
-window.addEventListener("resize",function(){ clearTimeout(window.__rz); window.__rz=setTimeout(function(){ redraw(); if(cfg.view==="rates") renderRates(); if(cfg.view==="credit") dessineNuage(lignesCredit()); },150); });
+window.addEventListener("resize",function(){ clearTimeout(window.__rz); window.__rz=setTimeout(function(){ redraw(); if(cfg.view==="rates") renderTaux(); if(cfg.view==="credit") dessineNuage(lignesCredit()); },150); });
 
 function bannerText(err){
   var why=(err&&err.message)||"erreur";
