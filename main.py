@@ -1472,7 +1472,8 @@ def _page_ou_message(request: Request = None):
     bloc = ("<script>window.__ARTX=" +
             json.dumps(graine, ensure_ascii=False).replace("</", "<\\/") + ";</script>")
     html = html.replace("</head>", bloc + "</head>", 1)
-    return HTMLResponse(html)
+    # la page porte la session et evolue a chaque deploiement : jamais de cache
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
 
 
 @app.get("/")
