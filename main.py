@@ -604,6 +604,93 @@ def _une_serie_us(spec):
                       "freq": "intraday", "err": str(exc)[:90], "annees": ans}
 
 
+# =====================================================================
+#  Taux a la carte : chaque ligne du F5 porte sa source et son code
+# =====================================================================
+#  Trois sources repondent avec une valeur : Yahoo pour les taux cotes en
+#  continu, la BCE et la Bundesbank pour les releves officiels. Une
+#  quatrieme, TradingView, n'est qu'un graphique : elle ne renvoie aucune
+#  valeur lisible par la page, elle sert a voir bouger ce que personne ne
+#  publie gratuitement en continu.
+
+TAUX_TTL = 600.0
+
+
+def _obs_yahoo(code):
+    import datetime as _dt
+    h = yh_chart(code, "1y", "1d")
+    c, t = h["c"], h["t"]
+    if not c:
+        raise RuntimeError("serie vide")
+    return [(_dt.datetime.utcfromtimestamp(t[i] / 1000).date().isoformat(), c[i])
+            for i in range(len(c))]
+
+
+def _resoudre_taux(spec: str):
+    """spec = source~code[~echeance]. Renvoie la derniere valeur et ses ecarts."""
+    morceaux = spec.split("~")
+    src = (morceaux[0] if morceaux else "").strip().lower()
+    code = (morceaux[1] if len(morceaux) > 1 else "").strip()
+    ans = _f(morceaux[2]) if len(morceaux) > 2 and morceaux[2].strip() else None
+    base = {"spec": spec, "src": src, "code": code, "annees": ans}
+    if not src or not code:
+        base["err"] = "specification incomplete"
+        return base
+    if src == "tv":
+        base.update(freq="graphique")
+        return base
+
+    hit = cache_get("taux:" + spec, TAUX_TTL)
+    if hit:
+        sortie = dict(base)
+        sortie.update(hit)
+        return sortie
+
+    rec = {}
+    try:
+        if src == "yahoo":
+            obs = _obs_yahoo(code)
+            rec["freq"] = "continu"
+        elif src == "ecb":
+            flow, _, cle = code.partition("/")
+            if not flow or not cle:
+                raise RuntimeError("attendu flux/cle, par exemple YC/B.U2.EUR...")
+            obs = ecb_series(flow, cle)
+            rec["freq"] = "mensuel" if cle.startswith("M.") else "quotidien"
+        elif src == "bbk":
+            obs = bbk_series(code)
+            rec["freq"] = "quotidien"
+        else:
+            raise RuntimeError("source inconnue : " + src)
+        rec.update({"v": obs[-1][1], "date": obs[-1][0],
+                    "d": _delta(obs, 1), "w": _delta(obs, 7),
+                    "m": _delta(obs, 30), "ytd": _delta(obs, "ytd")})
+        cache_put("taux:" + spec, rec)
+    except Exception as exc:
+        rec["err"] = str(exc)[:110]
+        rec.setdefault("freq", "")
+    sortie = dict(base)
+    sortie.update(rec)
+    return sortie
+
+
+@app.get("/api/taux")
+def taux(s: str = ""):
+    """Resout une liste de series separees par une barre verticale."""
+    specs = [x.strip() for x in s.split("|") if x.strip()][:60]
+    if not specs:
+        return JSONResponse({"asof": int(time.time() * 1000), "lignes": []},
+                            headers={"Cache-Control": "no-store"})
+    try:
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            lignes = list(pool.map(_resoudre_taux, specs))
+    except Exception as exc:
+        return JSONResponse({"asof": int(time.time() * 1000), "lignes": [],
+                             "err": str(exc)[:110]}, headers={"Cache-Control": "no-store"})
+    return JSONResponse({"asof": int(time.time() * 1000), "lignes": lignes},
+                        headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/rates")
 def rates():
     hit = cache_get("rates", RATES_TTL)
