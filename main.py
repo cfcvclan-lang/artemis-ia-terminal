@@ -56,17 +56,31 @@ if COMPTES_DISPO:
     comptes.init()
 
 
+def _env_users() -> bool:
+    """Les acces sont declares dans ARTX_USERS plutot que dans une base."""
+    return COMPTES_DISPO and comptes.mode_env()
+
+
 def _ouvert() -> bool:
-    """Sans module de comptes ou sans administrateur configure, acces libre."""
+    """Sans module de comptes, sans ARTX_USERS et sans administrateur, acces libre."""
     if not COMPTES_DISPO:
         return True
+    if comptes.mode_env():
+        return False
     return not bool(os.environ.get("ADMIN_EMAIL") and os.environ.get("ADMIN_PASSWORD"))
 
 
 def _moi(request: Request):
     if not COMPTES_DISPO:
         return None
-    return comptes.utilisateur_du_jeton(request.cookies.get(comptes.COOKIE))
+    jeton = request.cookies.get(comptes.COOKIE)
+    if comptes.mode_env():
+        return comptes.utilisateur_env(jeton)
+    return comptes.utilisateur_du_jeton(jeton)
+
+
+def _public(u):
+    return comptes.public_env(u) if isinstance(u, dict) else comptes.public(u)
 
 
 LIBRES = ("/health", "/auth/", "/manifest.webmanifest", "/icon.svg", "/sw.js", "/favicon.ico")
@@ -1100,6 +1114,7 @@ def cds(q: str = ""):
 #  confirmation a la reunion precedente, ce que l'affichage signale.
 
 REUNIONS = [
+    # (date ISO, institution, libelle, remarque)
     ("2026-10-29", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
     ("2026-10-30", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
     ("2026-11-05", "BoE", "Comite de politique monetaire, decision", ""),
@@ -1107,8 +1122,8 @@ REUNIONS = [
     ("2026-12-17", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
     ("2026-12-17", "BoE", "Comite de politique monetaire, decision", ""),
     ("2026-12-18", "BoJ", "Reunion de politique monetaire", ""),
-    ("2027-01-22", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
     ("2027-01-27", "Fed", "FOMC, decision", "indicatif"),
+    ("2027-01-22", "BoJ", "Reunion de politique monetaire, Outlook Report", ""),
     ("2027-02-04", "BCE", "Conseil des gouverneurs, decision de politique monetaire", ""),
     ("2027-02-04", "BoE", "Comite de politique monetaire, decision", ""),
     ("2027-03-17", "Fed", "FOMC, decision et projections economiques", "indicatif"),
@@ -1143,11 +1158,13 @@ REUNIONS = [
 
 RES_TTL = 12 * 3600.0
 
+
 def yh_resultats(sym: str):
     """Dates de publication de resultats connues de Yahoo pour un symbole.
 
-    Si Yahoo ne renvoie rien, on ne fabrique aucune date : l'absence est
-    signalee telle quelle plutot que devinee.
+    Le point d'entree graphique accepte le drapeau d'evenements. Si Yahoo ne
+    renvoie rien, on ne fabrique aucune date : l'absence est signalee telle
+    quelle plutot que devinee a partir du rythme des publications passees.
     """
     cle = "res:" + sym
     hit = cache_get(cle, RES_TTL)
@@ -1229,7 +1246,6 @@ def calendrier(syms: str = "", noms: str = "", jours: int = 90, passe: int = 7):
         "resultats_disponibles": trouves,
         "resultats_muets": vides,
     }, headers={"Cache-Control": "no-store"})
-
 
 
 @app.get("/api/diag")
@@ -1418,6 +1434,10 @@ def _ip(request: Request) -> str:
 
 @app.post("/auth/demande")
 async def auth_demande(request: Request):
+    if comptes.mode_env():
+        return JSONResponse({"ok": False, "erreur": "Les acces de ce terminal sont crees a la "
+                             "main par l'administrateur. Contactez-le directement."},
+                            status_code=403)
     cle = "demande:" + _ip(request)
     if comptes.trop_de_tentatives(cle, maxi=5, fenetre=3600):
         return JSONResponse({"ok": False, "erreur": "Trop de demandes depuis ce poste. Reessayez plus tard."},
@@ -1440,10 +1460,14 @@ async def auth_connexion(request: Request):
         corps = await request.json()
     except Exception:
         return JSONResponse({"ok": False, "erreur": "Requete illisible."}, status_code=400)
-    r = comptes.connecter(corps.get("email", ""), corps.get("mdp", ""))
+    email = corps.get("email", "")
+    r = (comptes.connecter_env(email, corps.get("mdp", ""))
+         if comptes.mode_env() else comptes.connecter(email, corps.get("mdp", "")))
     if not r.get("ok"):
         comptes.noter_tentative(cle)
+        comptes.noter("echec", str(email)[:80], r.get("erreur", ""), _ip(request))
         return JSONResponse({"ok": False, "erreur": r.get("erreur")}, status_code=401)
+    comptes.noter("connexion", r["moi"]["email"], r["moi"]["role"], _ip(request))
     rep = JSONResponse({"ok": True, "moi": r["moi"]})
     _pose_cookie(rep, r["jeton"], request.url.scheme == "https")
     return rep
@@ -1451,7 +1475,11 @@ async def auth_connexion(request: Request):
 
 @app.post("/auth/deconnexion")
 async def auth_deconnexion(request: Request):
-    comptes.fermer_session(request.cookies.get(comptes.COOKIE) or "")
+    u = _moi(request)
+    if u is not None:
+        comptes.noter("deconnexion", _public(u)["email"], "", _ip(request))
+    if not comptes.mode_env():
+        comptes.fermer_session(request.cookies.get(comptes.COOKIE) or "")
     rep = JSONResponse({"ok": True})
     rep.delete_cookie(comptes.COOKIE, path="/")
     return rep
@@ -1465,8 +1493,9 @@ async def auth_moi(request: Request):
     u = _moi(request)
     if not u:
         return JSONResponse({"ok": False}, status_code=401)
-    sortie = {"ok": True, "ouvert": False, "moi": comptes.public(u)}
-    if u["role"] == "admin":
+    p = _public(u)
+    sortie = {"ok": True, "ouvert": False, "moi": p, "env": comptes.mode_env()}
+    if p["role"] == "admin" and not comptes.mode_env():
         sortie["attente"] = comptes.en_attente()
     return sortie
 
@@ -1483,12 +1512,27 @@ async def auth_motdepasse(request: Request):
 
 @app.get("/admin/comptes")
 async def admin_comptes(request: Request):
-    return {"ok": True, "comptes": comptes.liste(), "attente": comptes.en_attente(),
-            "etat": comptes.etat()}
+    if comptes.mode_env():
+        return {"ok": True, "env": True, "attente": 0,
+                "comptes": sorted(
+                    [comptes.public_env(v) for v in comptes.comptes_env().values()],
+                    key=lambda x: (x["role"] != "admin", x["email"])),
+                "etat": comptes.etat_env()}
+    return {"ok": True, "env": False, "comptes": comptes.liste(),
+            "attente": comptes.en_attente(), "etat": comptes.etat()}
+
+
+@app.get("/admin/journal")
+async def admin_journal(request: Request, n: int = 200):
+    return {"ok": True, "lignes": comptes.journal(n), "env": comptes.mode_env()}
 
 
 @app.post("/admin/decision")
 async def admin_decision(request: Request):
+    if comptes.mode_env():
+        return JSONResponse({"ok": False, "erreur": "Les acces sont declares dans ARTX_USERS. "
+                             "Ajoutez ou retirez une ligne dans les variables Render."},
+                            status_code=400)
     u = getattr(request.state, "moi", None) or _moi(request)
     corps = await request.json()
     r = comptes.decider(corps.get("email", ""), corps.get("action", ""),
@@ -1502,6 +1546,10 @@ async def admin_decision(request: Request):
 @app.post("/admin/reinitialiser")
 async def admin_reinitialiser(request: Request):
     """L'administrateur fixe lui-meme un nouveau mot de passe pour un collaborateur."""
+    if comptes.mode_env():
+        return JSONResponse({"ok": False, "erreur": "Les mots de passe sont declares dans "
+                             "ARTX_USERS. Utilisez le generateur d'empreinte du panneau."},
+                            status_code=400)
     corps = await request.json()
     email = (corps.get("email") or "").strip().lower()
     nouveau = corps.get("nouveau") or ""
@@ -1524,6 +1572,8 @@ async def cfg_lire(request: Request):
     u = _moi(request)
     if not u:
         return JSONResponse({"ok": False}, status_code=401)
+    if comptes.mode_env():
+        return {"ok": True, "cfg": None, "local": True}
     return {"ok": True, "cfg": comptes.lire_config(u["email"])}
 
 
@@ -1532,6 +1582,9 @@ async def cfg_ecrire(request: Request):
     u = _moi(request)
     if not u:
         return JSONResponse({"ok": False}, status_code=401)
+    if comptes.mode_env():
+        # pas de base : chaque poste garde ses listes dans son navigateur
+        return {"ok": True, "local": True}
     try:
         corps = await request.json()
     except Exception:
@@ -1552,10 +1605,13 @@ def _page_ou_message(request: Request = None):
     graine = {"ouvert": _ouvert(), "moi": None, "cfg": None, "attente": 0}
     u = _moi(request) if request is not None else None
     if u:
-        graine["moi"] = comptes.public(u)
-        graine["cfg"] = comptes.lire_config(u["email"])
-        if u["role"] == "admin":
-            graine["attente"] = comptes.en_attente()
+        p = _public(u)
+        graine["moi"] = p
+        graine["env"] = comptes.mode_env()
+        if not comptes.mode_env():
+            graine["cfg"] = comptes.lire_config(p["email"])
+            if p["role"] == "admin":
+                graine["attente"] = comptes.en_attente()
     bloc = ("<script>window.__ARTX=" +
             json.dumps(graine, ensure_ascii=False).replace("</", "<\\/") + ";</script>")
     html = html.replace("</head>", bloc + "</head>", 1)
