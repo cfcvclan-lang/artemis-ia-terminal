@@ -127,6 +127,15 @@ table.adm-t tr:hover td{background:#0e1215}
 .adm-act button.oui:hover{border-color:var(--up);color:var(--up)}
 .adm-act button.non:hover{border-color:var(--down);color:var(--down)}
 .adm-msg{font-size:11.5px;color:var(--amber-soft);min-height:16px;margin-top:8px}
+.gen{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:7px}
+.gen input,.gen select{background:#05070a;border:1px solid var(--grid2);color:var(--fg);
+  padding:5px 8px;border-radius:2px;font:inherit;font-size:11.5px}
+.gen #gen-mail{min-width:230px;flex:1 1 230px}
+.gen #gen-nom{min-width:170px}
+.gen #gen-mdp{min-width:170px}
+#gen-out{width:100%;background:#05070a;border:1px solid var(--grid2);color:var(--amber-soft);
+  padding:7px 9px;border-radius:2px;font-family:var(--f-mono);font-size:11px;resize:vertical;
+  margin-bottom:7px;word-break:break-all}
 #ping[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#000;font-weight:600}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(34px + env(safe-area-inset-bottom,0px));
   background:#14100a;border:1px solid var(--amber);color:var(--amber-soft);padding:7px 15px;border-radius:2px;
@@ -1043,7 +1052,13 @@ function jget(url,ms){
   return new Promise(function(res,rej){
     var ctl=("AbortController" in window)?new AbortController():null;
     var to=setTimeout(function(){ if(ctl)ctl.abort(); rej(new Error("timeout")); }, ms||9000);
-    fetch(url,{signal:ctl?ctl.signal:undefined,mode:"cors",credentials:"omit"})
+    /* une adresse qui commence par "/" vise notre propre serveur : le cookie de
+       session doit partir avec, sinon les routes /api/ repondent 401. Les appels
+       directs vers Yahoo restent anonymes. */
+    var interne = url.charAt(0)==="/" || url.indexOf(location.origin+"/")===0;
+    fetch(url,{signal:ctl?ctl.signal:undefined,
+               mode:interne?"same-origin":"cors",
+               credentials:interne?"same-origin":"omit"})
       .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
       .then(function(j){ clearTimeout(to); res(j); })
       .catch(function(e){ clearTimeout(to); rej(e); });
@@ -1617,13 +1632,14 @@ function renderTaux(){
       lignes.push('<tr data-i="'+i+'"><td'+
         (e.tv?' title="Suivi en continu dans le panneau TradingView, symbole '+esc(e.tv)+'"':"")+'>'+
         esc(e.lib)+" "+badgeFreq(r.freq)+
-        (e.tv?' <span class="flat" style="font-size:9.5px">●</span>':"")+
+        (e.tv?' <span class="flat" style="font-size:9.5px">\u25cf</span>':"")+
         '</td>'+droite+'<td><button class="txdel" type="button" data-del="'+i+'" title="Retirer">&times;</button></td></tr>');
     });
     return '<div class="crpan"><h4>'+esc(FAMILLES[f]||f)+"</h4>"+
       '<table class="sc tx"><thead><tr><th>SERIE</th><th>NIVEAU</th><th>JOUR</th><th>1 SEM</th>'+
       "<th>1 MOIS</th><th>ARRETE</th><th></th></tr></thead><tbody>"+lignes.join("")+"</tbody></table></div>";
   }).join("");
+
   /* courbe reconstruite a partir des lignes qui portent une echeance */
   var courbes=[];
   function pts(fam){
@@ -1642,6 +1658,8 @@ function renderTaux(){
     (courbes.length?"":'<span>Ajoutez au moins deux echeances d\'une meme famille pour tracer une courbe.</span>')+
     "</div></div>";
 
+  var tvs=[];
+  L.forEach(function(e){ if(e.tv&&tvs.indexOf(e.tv)<0) tvs.push({s:e.tv,n:e.lib}); });
   var bloctv='<div class="crpan"><h4>En continu, graphiques TradingView</h4>'+
     '<div class="tvbox" id="tv-taux"></div></div>';
 
@@ -1670,7 +1688,7 @@ function brancherTaux(){
 function ouvrirCatalogue(){
   var el=$("ratesview"); if(!el) return;
   if($("txcat")) { $("txcat").remove(); return; }
-  var deja2={}; listeTaux().forEach(function(e){ deja2[cleTaux(e)]=1; });
+  var dejà={}; listeTaux().forEach(function(e){ dejà[cleTaux(e)]=1; });
   var w=document.createElement("div");
   w.className="crpan"; w.id="txcat";
   w.innerHTML='<h4>Ajouter un taux</h4>'+
@@ -1678,7 +1696,7 @@ function ouvrirCatalogue(){
       return '<div class="txgrp"><b>'+esc(g.g)+"</b>"+g.l.map(function(e){
         var k=cleTaux(e);
         return '<button class="fk txopt" type="button" data-cat="'+esc(k)+'"'+
-          (deja2[k]?' disabled aria-pressed="true"':"")+'>'+esc(e.lib)+(deja2[k]?" ✓":"")+"</button>";
+          (dejà[k]?' disabled aria-pressed="true"':"")+'>'+esc(e.lib)+(dejà[k]?" ✓":"")+"</button>";
       }).join("")+"</div>";
     }).join("")+
     '<div class="txlibre"><b>Ou saisir une serie</b>'+
@@ -1750,12 +1768,6 @@ function drawCurve(cv,courbes){
     ps.forEach(function(p){ g.beginPath(); g.arc(X(p.t),Yv(p.v),2.6,0,6.284); g.fillStyle=c.col; g.fill(); });
   });
 }
-/* ---------- taux en direct via les widgets TradingView ----------
-   Les widgets sont des cadres fermes : ils affichent, mais leurs valeurs
-   ne sont pas lisibles par la page, donc elles n'alimentent ni les ecarts
-   ni le moniteur. Ils ne se chargent pas non plus depuis l'artifact,
-   dont le bac a sable bloque les scripts externes. */
-var TV_POSE=false;
 function tvWidget(hote, fichier, conf){
   if(!hote) return;
   hote.innerHTML="";
@@ -1810,6 +1822,7 @@ function poserTradingView(){
     symbolsGroups:ordre.map(function(f){ return {name:f, originalName:f, symbols:groupes[f]}; })
   });
 }
+
 /* ---------- vue NEWS ---------- */
 var NEWS=null, newsLoading=false, NEWSVAL=null;
 function newsTerms(){
@@ -2110,6 +2123,7 @@ function echeance(n){
   if(n===-1) return "hier";
   return n>0 ? ("dans "+n+" jours") : ("il y a "+(-n)+" jours");
 }
+/* les sous-jacents cotes de la liste courante, ou de tout l'univers */
 function calCibles(){
   var l = (cfg.calport==="univers") ? univers() : currentList();
   return l.filter(function(o){ return !o.nf && (!o.t||o.t==="EQ"); }).slice(0,120);
@@ -2130,6 +2144,7 @@ function loadCal(force){
     .catch(function(e){ CAL={err:(e&&e.message)||"indisponible",at:Date.now(),cle:cle}; })
     .then(function(){ calCharge=false; renderCal(); });
 }
+/* evenements saisis a la main, propres au compte */
 function evPerso(){ return (cfg.calperso||[]).slice(); }
 function ajouterEvPerso(iso,texte){
   if(!iso||!texte) return;
@@ -2155,9 +2170,11 @@ function renderCal(){
     if(a.date!==b.date) return a.date<b.date?-1:1;
     return (a.type+a.libelle)<(b.type+b.libelle)?-1:1;
   });
+
   var nbRes=evs.filter(function(x){return x.type==="res";}).length;
   var muets=(CAL&&CAL.d&&CAL.d.resultats_muets)||0;
   var dispo=(CAL&&CAL.d&&CAL.d.resultats_disponibles)||0;
+
   var barre='<div class="calbar">'+
     [["tout","TOUT"],["bc","BANQUES CENTRALES"],["res","RESULTATS"],["perso","MES ECHEANCES"]]
       .map(function(k){
@@ -2175,6 +2192,7 @@ function renderCal(){
       '<input id="cal-lib" type="text" placeholder="Mon echeance : constatation, rappel client, comite..." maxlength="120">'+
       '<button class="fk" type="button" id="cal-add">AJOUTER</button>'+
       '<span class="flat" style="font-size:10.5px">Visible de vous seul.</span></div>';
+
   if(CAL&&CAL.err){
     el.innerHTML=barre+'<div class="empty">Calendrier indisponible ('+esc(CAL.err)+').</div>';
     brancherCal(); return;
@@ -2207,6 +2225,7 @@ function renderCal(){
   });
   if(jour!==null) corps+="</div>";
   if(!vus.length) corps='<div class="empty">Aucune echeance sur la periode retenue.</div>';
+
   var pied="";
   if(f==="tout"||f==="res"){
     pied='<div class="lgd flat" style="padding:4px 12px 14px">'+
@@ -2270,6 +2289,7 @@ function loadCredit(force){
     CRED={d:j,at:Date.now(),cle:cle,cibles:cibles};
     CRED_Q=j.quartiles||null;
     CDS_ASOF=j.asof||CDS_ASOF;
+    /* on alimente au passage le bloc credit de la fiche */
     cibles.forEach(function(o){ var t=(j.trouves||{})[o.n]; if(t) CDS[o.y]=t; else if(CDS[o.y]===undefined) CDS[o.y]=null; });
   }).catch(function(e){ CRED={err:(e&&e.message)||"indisponible",at:Date.now(),cle:cle}; })
     .then(function(){ credCharge=false; renderCredit(); });
@@ -2405,6 +2425,7 @@ function dessineNuage(L){
   }
   g.fillStyle="#8d867a"; g.font="10px monospace";
   g.fillText("spread CDS 5 ans en ordonnee, volatilite annualisee sur 1 an en abscisse",ml+4,h-6);
+  /* les points d'abord, les etiquettes ensuite, en evitant les chevauchements */
   pts.forEach(function(p){
     var x=X(p.vol), y=Y(p.spread);
     g.fillStyle=couleurSpread(p.spread);
@@ -2424,7 +2445,7 @@ function dessineNuage(L){
     var x=X(p.vol)+7, y=Y(p.spread)+3;
     if(!libre(x,y)) return;
     poses.push([x,y]);
-    var t=p.n.length>15?p.n.slice(0,14)+"…":p.n;
+    var t=p.n.length>15?p.n.slice(0,14)+"\u2026":p.n;
     if(x+t.length*5.6>w-mr){ x=X(p.vol)-7-t.length*5.6; }
     g.fillStyle="#cdc6ba"; g.fillText(t,x,y);
   });
@@ -2596,9 +2617,9 @@ function correl(y1,y2,n){
 }
 function teinteCorr(c){
   if(c==null) return "flat";
-  if(c>=0.75) return "down";
+  if(c>=0.75) return "down";      /* tres correle : un worst-of y gagne peu */
   if(c>=0.45) return "flat";
-  return "up";
+  return "up";                    /* faiblement correle : decorrelation utile */
 }
 function renderCorr(){
   var el=$("d-corr"); if(!el) return;
@@ -2619,7 +2640,7 @@ function renderCorr(){
   var somme=0; lignes.forEach(function(r){ somme+=r.c; });
   var moy=somme/lignes.length;
   var haut=lignes[0], bas=lignes[lignes.length-1];
-  if(info) info.textContent=lignes.length+" valeurs  ·  moyenne "+moy.toFixed(2);
+  if(info) info.textContent=lignes.length+" valeurs  \u00b7  moyenne "+moy.toFixed(2);
   var corps=lignes.map(function(r){
     return '<tr data-y="'+esc(r.y)+'" class="cliq"><td>'+esc(r.n)+
       '</td><td class="tnum '+teinteCorr(r.c)+'">'+r.c.toFixed(2)+
@@ -3335,7 +3356,11 @@ document.addEventListener("keydown",function(e){
   if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
   var map={F1:"mon",F2:"heat",F3:"perf",F4:"charts",F5:"rates",F6:"news",F7:"scan",F8:"cal",
             F9:"credit",F10:"admin"};
-  if(map[e.key]){ e.preventDefault(); var b=document.querySelector('.fk[data-view="'+map[e.key]+'"]'); if(b) b.click(); }
+  if(map[e.key]){ e.preventDefault();
+    var b=document.querySelector('.fk[data-view="'+map[e.key]+'"]');
+    /* un onglet masque, l'administration pour un membre par exemple, ne
+       s'ouvre pas davantage au clavier qu'a la souris */
+    if(b&&!b.hidden) b.click(); }
   if(e.key==="/"){ e.preventDefault(); $("q").focus(); }
 });
 window.addEventListener("resize",function(){ clearTimeout(window.__rz); window.__rz=setTimeout(function(){ redraw(); if(cfg.view==="rates") renderTaux(); if(cfg.view==="credit") dessineNuage(lignesCredit()); },150); });
@@ -3709,6 +3734,7 @@ function majBandeau(){
   if(m){ m.hidden=false; m.textContent=(SESSION.prenom||"")+" "+(SESSION.nom||""); }
   if(d){ d.hidden=false; }
   if(b){ b.hidden = SESSION.role!=="admin"; }
+  ENVMODE=!!(window.__ARTX&&window.__ARTX.env);
   majPastille((window.__ARTX&&window.__ARTX.attente)||0);
 }
 function majPastille(n){
@@ -3753,13 +3779,132 @@ function tableauComptes(titre, lignes, vide){
     "<th>Telephone</th><th>Demande</th><th>Statut</th><th>Action</th></tr></thead><tbody>"+
     lignes.map(ligneCompte).join("")+"</tbody></table></div>";
 }
+var ENVMODE=false, JOURNAL=[], ADM_ETAT=null;
+
+function heureCourte(ts){
+  if(!ts) return "--";
+  var d=new Date(ts);
+  return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+" "+
+         ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2)+":"+
+         ("0"+d.getSeconds()).slice(-2);
+}
+function tableauJournal(){
+  if(!JOURNAL.length) return '<div class="bloc"><h4>Activite</h4>'+
+    '<div class="lgd flat">Rien depuis le dernier demarrage du service.</div></div>';
+  var teinte={connexion:"up", deconnexion:"flat", echec:"down", demarrage:"flat"};
+  return '<div class="bloc"><h4>Activite  ('+JOURNAL.length+' lignes)</h4>'+
+    '<table class="adm-t"><thead><tr><th>Heure</th><th>Evenement</th><th>Compte</th>'+
+    "<th>Adresse</th><th>Detail</th></tr></thead><tbody>"+
+    JOURNAL.map(function(l){
+      return "<tr><td>"+esc(heureCourte(l.t))+"</td>"+
+        '<td class="'+(teinte[l.ev]||"flat")+'">'+esc(l.ev)+"</td>"+
+        "<td>"+esc(l.email||"-")+"</td>"+
+        '<td class="flat">'+esc(l.ip||"-")+"</td>"+
+        '<td class="flat">'+esc(l.detail||"")+"</td></tr>";
+    }).join("")+"</tbody></table>"+
+    '<div class="lgd flat">Journal en memoire, remis a zero quand le service redemarre ou '+
+    "sort de veille. Les memes lignes partent dans le flux de logs Render, conserve sept jours, "+
+    'cherchables avec le mot cle ARTX.</div></div>';
+}
+function tableauEnv(){
+  var e=ADM_ETAT||{};
+  return '<div class="bloc"><h4>Acces en place</h4>'+
+    '<table class="adm-t"><thead><tr><th>Collaborateur</th><th>Email</th><th>Role</th></tr></thead><tbody>'+
+    COMPTES.map(function(c){
+      return "<tr><td>"+esc(((c.prenom||"")+" "+(c.nom||"")).trim()||"-")+"</td>"+
+        "<td>"+esc(c.email)+"</td>"+
+        '<td><span class="et '+(c.role==="admin"?"attente":"actif")+'">'+esc(c.role)+"</span></td></tr>";
+    }).join("")+"</tbody></table>"+
+    '<div class="lgd flat">'+(e.comptes||0)+" acces declares dans la variable ARTX_USERS, dont "+
+    (e.admins||0)+" administrateur"+((e.admins||0)>1?"s":"")+". "+
+    (e.secret_dedie?"Cle de signature dediee.":
+      "Aucune variable ARTX_SECRET : la cle de signature des sessions est derivee de la liste, "+
+      "donc modifier un acces deconnecte tout le monde. Posez ARTX_SECRET pour eviter cela.")+
+    " Pour ajouter ou retirer quelqu'un, modifiez la variable dans Render puis redeployez."+
+    "</div></div>";
+}
+/* Generateur d'empreinte : le mot de passe ne quitte jamais ce navigateur.
+   Le calcul reprend exactement celui du serveur, PBKDF2-HMAC-SHA256,
+   200 000 iterations, sel en hexadecimal servant de graine texte. */
+function blocGenerateur(){
+  return '<div class="bloc"><h4>Creer une ligne d\'acces</h4>'+
+    '<div class="gen">'+
+      '<input id="gen-mail" type="email" placeholder="prenom@artemis-ia.com" autocomplete="off">'+
+      '<input id="gen-nom" type="text" placeholder="Prenom NOM" autocomplete="off" maxlength="40">'+
+      '<input id="gen-mdp" type="password" placeholder="mot de passe" autocomplete="new-password">'+
+      '<select id="gen-role"><option value="membre">MEMBRE</option><option value="admin">ADMIN</option></select>'+
+      '<button class="fk" type="button" id="gen-go">GENERER</button>'+
+    "</div>"+
+    '<textarea id="gen-out" rows="2" readonly placeholder="la ligne a coller apparaitra ici"></textarea>'+
+    '<div class="gen"><button class="fk" type="button" id="gen-copy">COPIER</button>'+
+      '<span class="adm-msg" id="gen-msg"></span></div>'+
+    '<div class="lgd flat">Le mot de passe est transforme en empreinte dans votre navigateur et '+
+    "n'est envoye nulle part. Collez la ligne obtenue dans la variable ARTX_USERS sur Render, "+
+    "une ligne par personne, puis redeployez. Pour retirer un acces, supprimez sa ligne.</div></div>";
+}
+function hexAleatoire(n){
+  var a=new Uint8Array(n); crypto.getRandomValues(a);
+  return [].map.call(a,function(x){ return ("0"+x.toString(16)).slice(-2); }).join("");
+}
+function empreinteMdp(mdp,selHex){
+  var enc=new TextEncoder();
+  return crypto.subtle.importKey("raw",enc.encode(mdp),{name:"PBKDF2"},false,["deriveBits"])
+    .then(function(cle){
+      return crypto.subtle.deriveBits(
+        {name:"PBKDF2", salt:enc.encode(selHex), iterations:200000, hash:"SHA-256"}, cle, 256);
+    })
+    .then(function(bits){
+      return [].map.call(new Uint8Array(bits),function(x){ return ("0"+x.toString(16)).slice(-2); }).join("");
+    });
+}
+function brancherGenerateur(){
+  var go=$("gen-go"); if(!go) return;
+  go.addEventListener("click",function(){
+    var mail=($("gen-mail").value||"").trim().toLowerCase();
+    var nom=($("gen-nom").value||"").trim();
+    var mdp=$("gen-mdp").value||"";
+    var role=$("gen-role").value;
+    var msg=$("gen-msg");
+    if(!mail||mail.indexOf("@")<0){ msg.textContent="Indiquez une adresse email."; return; }
+    if(mdp.length<10){ msg.textContent="Dix caracteres minimum pour le mot de passe."; return; }
+    msg.textContent="Calcul en cours...";
+    var sel=hexAleatoire(16);
+    empreinteMdp(mdp,sel).then(function(emp){
+      $("gen-out").value=mail+" | "+sel+"$"+emp+" | "+(nom||mail.split("@")[0])+
+        (role==="admin"?" | admin":"");
+      $("gen-mdp").value="";
+      msg.textContent="Ligne prete. Le mot de passe a ete efface de ce formulaire.";
+    }).catch(function(e){ msg.textContent="Calcul impossible : "+((e&&e.message)||"erreur"); });
+  });
+  var cp=$("gen-copy");
+  if(cp) cp.addEventListener("click",function(){
+    var t=$("gen-out"); if(!t.value) return;
+    t.select();
+    try{ document.execCommand("copy"); toast("Ligne copiee."); }
+    catch(e){ toast("Copiez la ligne a la main."); }
+  });
+}
 function renderAdmin(){
   var el=$("adminview"); if(!el) return;
+  if(!OUVERT&&SESSION&&SESSION.role!=="admin"){
+    el.innerHTML='<div class="adm"><div class="bloc"><h4>Administration</h4><div class="lgd flat">'+
+      "Ce panneau est reserve a l'administrateur du terminal."+
+      "</div></div></div>";
+    majPastille(0);
+    return;
+  }
   if(OUVERT){
     el.innerHTML='<div class="adm"><div class="bloc"><h4>Comptes</h4><div class="lgd flat">'+
-      "Aucun compte administrateur n'est configure sur ce serveur, le terminal est donc en acces libre. "+
-      "Renseignez ADMIN_EMAIL et ADMIN_PASSWORD dans les variables d'environnement Render pour activer "+
-      "la gestion des acces.</div></div></div>";
+      "Aucun acces n'est configure sur ce serveur, le terminal est donc ouvert. "+
+      "Renseignez ARTX_USERS dans les variables d'environnement Render pour fermer l'acces."+
+      "</div></div></div>";
+    return;
+  }
+  if(ENVMODE){
+    el.innerHTML='<div class="adm">'+tableauEnv()+tableauJournal()+blocGenerateur()+
+      '<div class="adm-msg" id="adm-msg">'+esc(ADM_MSG)+"</div></div>";
+    brancherGenerateur();
+    majPastille(0);
     return;
   }
   var att=COMPTES.filter(function(c){return c.statut==="attente";});
@@ -3769,6 +3914,7 @@ function renderAdmin(){
     tableauComptes("Demandes en attente", att, "Aucune demande en attente.")+
     tableauComptes("Collaborateurs actifs", act, "Aucun compte actif.")+
     tableauComptes("Acces refuses ou suspendus", aut, "Rien a signaler.")+
+    tableauJournal()+
     '<div class="adm-msg" id="adm-msg">'+esc(ADM_MSG)+"</div></div>";
   majPastille(att.length);
 }
@@ -3777,9 +3923,12 @@ function chargerComptes(silencieux){
   return admFetch("/admin/comptes").then(function(j){
     if(!j||!j.ok) return;
     COMPTES=j.comptes||[];
+    ENVMODE=!!j.env; ADM_ETAT=j.etat||null;
     majPastille(j.attente||0);
-    if(cfg.view==="admin"&&!silencieux) renderAdmin();
-    else if(cfg.view==="admin") renderAdmin();
+    return admFetch("/admin/journal?n=200");
+  }).then(function(k){
+    if(k&&k.ok) JOURNAL=k.lignes||[];
+    if(cfg.view==="admin") renderAdmin();
   }).catch(function(){});
 }
 document.addEventListener("click",function(e){
@@ -3853,6 +4002,7 @@ function ajouterADestination(){
   if((UNIVERSE[cible]||[]).some(function(x){ return x.y===sel; })){
     toast(o.n+" est deja dans "+cible+"."); return;
   }
+  /* si la valeur avait ete retiree de cette liste, on annule ce retrait */
   if(cfg.removed&&cfg.removed[cible]){
     cfg.removed[cible]=cfg.removed[cible].filter(function(x){ return x!==sel; });
   }
