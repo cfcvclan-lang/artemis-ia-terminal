@@ -3730,7 +3730,13 @@ select(currentList()[0].y);
 
 function majBandeau(){
   var m=$("moi"), d=$("deco"), b=$("bt-admin");
-  if(OUVERT||!SESSION){ if(m) m.hidden=true; if(d) d.hidden=true; if(b) b.hidden=true; return; }
+  if(OUVERT||!SESSION){
+    if(m) m.hidden=true; if(d) d.hidden=true;
+    /* terminal ouvert : pas de session a afficher, mais l'onglet reste la pour
+       fabriquer la premiere ligne d'acces */
+    if(b) b.hidden=!OUVERT;
+    return;
+  }
   if(m){ m.hidden=false; m.textContent=(SESSION.prenom||"")+" "+(SESSION.nom||""); }
   if(d){ d.hidden=false; }
   if(b){ b.hidden = SESSION.role!=="admin"; }
@@ -3894,10 +3900,19 @@ function renderAdmin(){
     return;
   }
   if(OUVERT){
+    /* le terminal est encore ouvert : c'est precisement ici qu'il faut pouvoir
+       fabriquer la toute premiere ligne d'acces, sinon personne ne peut fermer
+       la porte derriere soi */
     el.innerHTML='<div class="adm"><div class="bloc"><h4>Comptes</h4><div class="lgd flat">'+
-      "Aucun acces n'est configure sur ce serveur, le terminal est donc ouvert. "+
-      "Renseignez ARTX_USERS dans les variables d'environnement Render pour fermer l'acces."+
-      "</div></div></div>";
+      "Aucun acces n'est configure sur ce serveur, le terminal est donc ouvert a qui "+
+      "connait son adresse. Fabriquez ci-dessous votre ligne d'administrateur, collez-la "+
+      "dans la variable ARTX_USERS sur Render, puis redeployez : le terminal se ferme et "+
+      "demande une connexion. Posez aussi ARTX_SECRET, une chaine aleatoire quelconque, "+
+      "sans quoi la moindre modification de la liste deconnecte tout le monde."+
+      "</div></div>"+blocGenerateur()+
+      '<div class="adm-msg" id="adm-msg">'+esc(ADM_MSG)+"</div></div>";
+    brancherGenerateur();
+    majPastille(0);
     return;
   }
   if(ENVMODE){
