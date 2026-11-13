@@ -763,8 +763,8 @@ body.confort .itx-t td{padding:9px 8px}
     <select id="a-tab"></select>
     <button class="fk" type="button" id="a-go">VERIFIER ET AJOUTER</button>
   </div>
-  <div class="msg flat" id="a-msg">Le ticker suit la nomenclature Yahoo Finance : suffixe .PA pour Paris, .DE pour Francfort, .MI pour Milan, rien pour les valeurs americaines.</div>
-  <div class="row">
+  <div class="msg flat" id="a-msg">Le ticker suit la nomenclature Yahoo Finance : suffixe .PA pour Paris, .DE pour Francfort, .MI pour Milan, rien pour les valeurs americaines. Un titre ajoute rejoint la liste choisie pour tous les utilisateurs. Pour le retirer, passez par MODIFIER.</div>
+  <div class="row" hidden>
     <label>Ajouts</label>
     <div class="chips" id="a-chips"></div>
   </div>
@@ -1183,17 +1183,7 @@ function pousser(){
 }
 function save(){try{localStorage.setItem(LS,JSON.stringify(cfg));}catch(e){} pousser();}
 
-/* titres ajoutes a la main, fusionnes dans l'univers au demarrage */
-cfg.custom = cfg.custom || {};
-(function(){
-  Object.keys(cfg.custom).forEach(function(tab){
-    if(!UNIVERSE[tab]) return;
-    (cfg.custom[tab]||[]).forEach(function(o){
-      if(!UNIVERSE[tab].some(function(x){return x.y===o.y;})) UNIVERSE[tab].push(o);
-      if(!UNIVERSE["OVERALL"].some(function(x){return x.y===o.y;})) UNIVERSE["OVERALL"].push(o);
-    });
-  });
-})();
+/* les titres ajoutes sont fusionnes par rebuildUniverse, apres la capture des listes livrees */
 /* univers = listes livrees + listes creees + ajouts - retraits */
 cfg.custom  = cfg.custom  || {};
 cfg.wl      = cfg.wl      || [];
@@ -4267,6 +4257,114 @@ if(SESSION&&SESSION.role==="admin"){ chargerComptes(true); setInterval(function(
 clocks(); setInterval(clocks,1000);
 refresh().then(warmHist);
 setInterval(loop,1000);
+
+/* =====================================================================
+   Configuration partagee : ajouts, listes, retraits et ordre communs a tous
+   ===================================================================== */
+var PARTAGE={actif:false,v:-1,snap:null,envoi:false,attente:null};
+var CLES_P=["custom","wl","removed","order","hidden"];
+function pVide(k){ return (k==="wl"||k==="hidden")?[]:{}; }
+function pCopie(){ var o={}; CLES_P.forEach(function(k){ o[k]=JSON.parse(JSON.stringify(cfg[k]||pVide(k))); }); return o; }
+function pEnsembleDiff(a,b){
+  var A=a||[], B=b||[];
+  var add=B.filter(function(x){ return A.indexOf(x)<0; }), del=A.filter(function(x){ return B.indexOf(x)<0; });
+  return (add.length||del.length)?{add:add,del:del}:null;
+}
+function pDiff(a,b){
+  var p={}, n=0;
+  /* titres ajoutes, par liste */
+  var tabs={}; Object.keys(a.custom).concat(Object.keys(b.custom)).forEach(function(t){ tabs[t]=1; });
+  Object.keys(tabs).forEach(function(t){
+    var ya=(a.custom[t]||[]).map(function(o){ return o.y; }), yb=(b.custom[t]||[]).map(function(o){ return o.y; });
+    var add=(b.custom[t]||[]).filter(function(o){ return ya.indexOf(o.y)<0; }), del=ya.filter(function(y){ return yb.indexOf(y)<0; });
+    if(add.length||del.length){ (p.custom=p.custom||{})[t]={add:add,del:del}; n++; }
+  });
+  tabs={}; Object.keys(a.removed).concat(Object.keys(b.removed)).forEach(function(t){ tabs[t]=1; });
+  Object.keys(tabs).forEach(function(t){ var d=pEnsembleDiff(a.removed[t],b.removed[t]); if(d){ (p.removed=p.removed||{})[t]=d; n++; } });
+  ["wl","hidden"].forEach(function(k){ var d=pEnsembleDiff(a[k],b[k]); if(d){ p[k]=d; n++; } });
+  tabs={}; Object.keys(a.order).concat(Object.keys(b.order)).forEach(function(t){ tabs[t]=1; });
+  Object.keys(tabs).forEach(function(t){
+    if(JSON.stringify(a.order[t]||null)!==JSON.stringify(b.order[t]||null)){ (p.order=p.order||{})[t]=b.order[t]||null; n++; } });
+  return n?p:null;
+}
+function pAppliquer(doc,v){
+  var avant=JSON.stringify(pCopie());
+  CLES_P.forEach(function(k){ cfg[k]=(doc&&doc[k])||pVide(k); });
+  PARTAGE.snap=pCopie(); PARTAGE.v=v;
+  saveOrig();
+  if(JSON.stringify(PARTAGE.snap)===avant) return;
+  rebuildUniverse();
+  if(sel&&!SYMS[sel]) sel=(currentList()[0]||{}).y||null;
+  buildTabs(); renderAll(); renderWl();
+  if(window.majSelecteurOnglets) majSelecteurOnglets();
+}
+function pPousser(){
+  if(!PARTAGE.actif||!PARTAGE.snap) return;
+  if(PARTAGE.envoi){ clearTimeout(PARTAGE.attente); PARTAGE.attente=setTimeout(pPousser,400); return; }
+  var maintenant=pCopie(), patch=pDiff(PARTAGE.snap,maintenant);
+  if(!patch) return;
+  PARTAGE.envoi=true; PARTAGE.snap=maintenant;
+  fetch("/api/partage",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({patch:patch})})
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      PARTAGE.envoi=false;
+      if(j&&j.ok){
+        /* d'autres changements ont pu arriver entre-temps : on garde ce qui est en attente localement */
+        var attente=pDiff(PARTAGE.snap,pCopie());
+        pAppliquer(j.doc,j.v);
+        if(attente) { pAppliquerLocal(attente); pPousser(); }
+      }
+    })
+    .catch(function(){ PARTAGE.envoi=false; PARTAGE.snap=null; pCharger(false); toast("Modification non partagee : serveur injoignable, nouvel essai en cours."); });
+}
+function pAppliquerLocal(patch){
+  /* rejoue un correctif sur la configuration locale, sans l'envoyer */
+  Object.keys(patch.custom||{}).forEach(function(t){
+    var op=patch.custom[t], l=(cfg.custom[t]||[]).filter(function(o){ return (op.del||[]).indexOf(o.y)<0; });
+    (op.add||[]).forEach(function(o){ if(!l.some(function(x){ return x.y===o.y; })) l.push(o); });
+    cfg.custom[t]=l;
+  });
+  Object.keys(patch.removed||{}).forEach(function(t){
+    var op=patch.removed[t], l=(cfg.removed[t]||[]).filter(function(y){ return (op.del||[]).indexOf(y)<0; });
+    (op.add||[]).forEach(function(y){ if(l.indexOf(y)<0) l.push(y); }); cfg.removed[t]=l;
+  });
+  ["wl","hidden"].forEach(function(k){ var op=patch[k]; if(!op) return;
+    var l=cfg[k].filter(function(x){ return (op.del||[]).indexOf(x)<0; });
+    (op.add||[]).forEach(function(x){ if(l.indexOf(x)<0) l.push(x); }); cfg[k]=l; });
+  Object.keys(patch.order||{}).forEach(function(t){ if(patch.order[t]) cfg.order[t]=patch.order[t]; else delete cfg.order[t]; });
+}
+function pCharger(premier){
+  if(!SERVED) return;
+  fetch("/api/partage",{credentials:"same-origin",cache:"no-store"})
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(j){
+      if(!j||!j.doc) return;
+      PARTAGE.actif=true;
+      if(premier&&!cfg.partageMigre){
+        /* premiere connexion : ce que ce navigateur avait ajoute seul rejoint le terminal commun */
+        var local=pCopie(), base=JSON.parse(JSON.stringify(j.doc));
+        CLES_P.forEach(function(k){ base[k]=base[k]||pVide(k); });
+        var patch=pDiff(base,local);
+        if(patch){ ["custom","removed","wl","hidden"].forEach(function(k){
+            var o=patch[k]; if(!o) return;
+            if(k==="wl"||k==="hidden"){ o.del=[]; } else Object.keys(o).forEach(function(t){ o[t].del=[]; });
+          });
+        }
+        cfg.partageMigre=1;
+        pAppliquer(j.doc,j.v);
+        if(patch){ pAppliquerLocal(patch); pPousser(); }
+        return;
+      }
+      if(j.v!==PARTAGE.v&&!PARTAGE.envoi&&!document.body.classList.contains("resize")) pAppliquer(j.doc,j.v);
+    })
+    .catch(function(){});
+}
+var saveOrig=save;
+save=function(){ saveOrig(); pPousser(); };
+pCharger(true);
+setInterval(function(){ if(!document.hidden) pCharger(false); },30000);
+document.addEventListener("visibilitychange",function(){ if(!document.hidden) pCharger(false); });
 
 /* =====================================================================
    F9 : indices iTraxx Europe et Fin Sub, sous-jacents des CLN
