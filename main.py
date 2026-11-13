@@ -1030,7 +1030,7 @@ ITX_SERIES = (43, 44, 45, 46)
 ITX_TENORS = (3, 5, 7, 10)
 ITX_PARAMS = {"MAIN": {"coupon": 100.0, "recup": 0.40}, "FINSUB": {"coupon": 100.0, "recup": 0.20}}
 _RE_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-_RE_SERIE = re.compile(r"(?:SERIES|SERIE|SER)[\s._-]*(\d{1,2})\b|\bS(\d{2})\b|\.(\d{2})\.V\d")
+_RE_SERIE = re.compile(r"(?:SERIES|SERIE|SER)[\s._-]*(\d{1,2})\b|\bS(\d{2})\b|\.(\d{2})\.V\d|S(\d{2})V\d")
 _RE_TENOR = re.compile(r"\b(\d{1,2})\s?(?:Y|YR|YRS|YEAR|YEARS|A|ANS)\b")
 
 
@@ -1127,7 +1127,7 @@ def _itx_lire(recs):
         tenor = _itx_tenor(serie, ech, txt)
         if tenor is None:
             continue
-        prix = _itx_num(o, ("eodprice", "settlementprice", "price"))
+        ech = ech or _dt.date(_itx_lancement(serie).year + tenor + (_itx_lancement(serie).month + 2) // 12, (_itx_lancement(serie).month + 2) % 12 + 1, 20); prix = _itx_num(o, ("eodprice", "settlementprice", "price"))
         spread = _itx_num(o, ("eodspread", "parspread", "spread"))
         if spread is not None and 0 < spread < 1:
             spread = spread * 10000.0          # spread exprime en decimal
@@ -1208,7 +1208,7 @@ def charger_itraxx(diag: bool = False):
             e["cles"] = sorted(recs[0].keys())[:30]
             itx = [o for o in recs if "ITRAXX" in " ".join(str(v) for v in o.values()).upper()]
             e["itraxx"] = len(itx)
-            e["exemples"] = itx[:6] if diag else len(itx[:6])
+            e["exemples"] = itx[:6] if diag else len(itx[:6]); e["noms"] = sorted({str(o.get("instrumentName") or "") for o in itx})[:250] if diag else 0
         l, a = _itx_lire(recs)
         e["retenus"] = len(l)
         essais.append(e)
