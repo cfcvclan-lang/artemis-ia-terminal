@@ -47,6 +47,12 @@ except Exception as _e:          # pragma: no cover
 else:
     MOTIF_COMPTES = ""
 
+# Page d'introduction, sans connexion
+try:
+    from intro import INTRO
+except Exception:                # pragma: no cover
+    INTRO = ""
+
 app = FastAPI(title="Artemis IA Terminal API", version="9.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"]
@@ -1236,6 +1242,270 @@ def itraxx(diag: int = 0):
     return JSONResponse(d, headers={"Cache-Control": "no-store"})
 
 
+# =====================================================================
+#  Configuration partagee : ajouts, listes, retraits et ordre communs
+# =====================================================================
+#  Ce qu'un utilisateur ajoute, retire ou reordonne dans les listes vaut
+#  pour tous. Le terminal envoie de petits correctifs, appliques ici un par
+#  un, ce qui evite qu'un utilisateur efface les changements d'un autre.
+#  Stockage : un fichier dans le repertoire de donnees, et, si la variable
+#  ARTX_GITHUB_TOKEN est renseignee, une copie dans le depot GitHub, sur une
+#  branche a part (ARTX_GITHUB_BRANCHE, "donnees" par defaut), pour survivre
+#  aux redemarrages de Render sans declencher de redeploiement.
+
+PARTAGE_CLES = ("custom", "wl", "removed", "order", "hidden")
+_P_VERROU = threading.Lock()
+_P = {"v": 0, "doc": None, "maj": 0}
+_P_GH = {"sha": None, "timer": None, "etat": "inactif", "erreur": None}
+GH_TOKEN = os.environ.get("ARTX_GITHUB_TOKEN", "").strip()
+GH_REPO = os.environ.get("ARTX_GITHUB_REPO", "cfcvclan-lang/artemis-ia-terminal").strip()
+GH_BRANCHE = os.environ.get("ARTX_GITHUB_BRANCHE", "donnees").strip()
+GH_CHEMIN = "partage.json"
+
+
+def _p_vide():
+    return {"custom": {}, "wl": [], "removed": {}, "order": {}, "hidden": []}
+
+
+def _p_txt(v, n=80):
+    return str(v)[:n] if v is not None else ""
+
+
+def _p_titre(o):
+    if not isinstance(o, dict) or not o.get("y"):
+        return None
+    t = {"n": _p_txt(o.get("n") or o.get("y"), 80), "y": _p_txt(o.get("y"), 40),
+         "c": _p_txt(o.get("c") or "EUR", 8), "t": _p_txt(o.get("t") or "EQ", 8)}
+    if o.get("nf"):
+        t["nf"] = 1
+    t["perso"] = 1
+    return t
+
+
+def _p_sain(d):
+    s = _p_vide()
+    if not isinstance(d, dict):
+        return s
+    for tab, l in (d.get("custom") or {}).items():
+        if isinstance(l, list):
+            s["custom"][_p_txt(tab, 28)] = [x for x in (_p_titre(o) for o in l[:400]) if x]
+    for tab, l in (d.get("removed") or {}).items():
+        if isinstance(l, list):
+            s["removed"][_p_txt(tab, 28)] = [_p_txt(y, 40) for y in l[:600]]
+    for tab, l in (d.get("order") or {}).items():
+        if isinstance(l, list):
+            s["order"][_p_txt(tab, 28)] = [_p_txt(y, 40) for y in l[:800]]
+    for k in ("wl", "hidden"):
+        if isinstance(d.get(k), list):
+            s[k] = [_p_txt(x, 28) for x in d[k][:60]]
+    return s
+
+
+def _p_fichier():
+    try:
+        rep = comptes.repertoire() if COMPTES_DISPO else None
+    except Exception:
+        rep = None
+    rep = rep or os.path.join(HERE, "donnees")
+    os.makedirs(rep, exist_ok=True)
+    return os.path.join(rep, "partage.json")
+
+
+def _gh_entetes():
+    return {"Authorization": "Bearer " + GH_TOKEN, "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "artemis-ia-terminal"}
+
+
+def _gh_lire():
+    """Derniere copie enregistree sur GitHub, ou None."""
+    import base64
+    if not GH_TOKEN:
+        return None
+    try:
+        r = requests.get("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, GH_CHEMIN),
+                         params={"ref": GH_BRANCHE}, headers=_gh_entetes(), timeout=15)
+        if r.status_code == 200:
+            j = r.json()
+            _P_GH["sha"] = j.get("sha")
+            _P_GH["etat"] = "ok"
+            return json.loads(base64.b64decode(j.get("content") or "").decode("utf-8"))
+        _P_GH["etat"] = "absent" if r.status_code == 404 else "erreur"
+        _P_GH["erreur"] = "lecture %s" % r.status_code
+    except Exception as ex:
+        _P_GH["etat"], _P_GH["erreur"] = "erreur", str(ex)[:160]
+    return None
+
+
+def _gh_branche():
+    """Cree la branche de donnees a partir de main si elle n'existe pas."""
+    b = "https://api.github.com/repos/%s/git" % GH_REPO
+    r = requests.get(b + "/ref/heads/" + GH_BRANCHE, headers=_gh_entetes(), timeout=15)
+    if r.status_code == 200:
+        return True
+    m = requests.get(b + "/ref/heads/main", headers=_gh_entetes(), timeout=15)
+    if m.status_code != 200:
+        return False
+    sha = m.json()["object"]["sha"]
+    c = requests.post(b + "/refs", headers=_gh_entetes(), timeout=15,
+                      json={"ref": "refs/heads/" + GH_BRANCHE, "sha": sha})
+    return c.status_code in (200, 201)
+
+
+def _gh_ecrire():
+    import base64
+    with _P_VERROU:
+        corps = json.dumps({"v": _P["v"], "maj": _P["maj"], "doc": _P["doc"]}, ensure_ascii=False, indent=1)
+    try:
+        if not _gh_branche():
+            _P_GH["etat"], _P_GH["erreur"] = "erreur", "branche introuvable ou droits insuffisants"
+            return
+        if not _P_GH["sha"]:
+            _gh_lire()
+        data = {"message": "Configuration partagee du terminal", "branch": GH_BRANCHE,
+                "content": base64.b64encode(corps.encode("utf-8")).decode("ascii")}
+        if _P_GH["sha"]:
+            data["sha"] = _P_GH["sha"]
+        r = requests.put("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, GH_CHEMIN),
+                         headers=_gh_entetes(), json=data, timeout=20)
+        if r.status_code in (200, 201):
+            _P_GH["sha"] = r.json()["content"]["sha"]
+            _P_GH["etat"], _P_GH["erreur"] = "ok", None
+        elif r.status_code == 409:
+            _P_GH["sha"] = None
+            _gh_planifier(5)
+        else:
+            _P_GH["etat"], _P_GH["erreur"] = "erreur", "ecriture %s" % r.status_code
+    except Exception as ex:
+        _P_GH["etat"], _P_GH["erreur"] = "erreur", str(ex)[:160]
+
+
+def _gh_planifier(delai=12):
+    if not GH_TOKEN:
+        return
+    t = _P_GH.get("timer")
+    if t:
+        t.cancel()
+    _P_GH["timer"] = threading.Timer(delai, _gh_ecrire)
+    _P_GH["timer"].daemon = True
+    _P_GH["timer"].start()
+
+
+def _p_charger():
+    if _P["doc"] is not None:
+        return
+    cand = []
+    try:
+        with open(_p_fichier(), "r", encoding="utf-8") as f:
+            cand.append(json.load(f))
+    except Exception:
+        pass
+    g = _gh_lire()
+    if g:
+        cand.append(g)
+    try:   # graine eventuelle livree avec le depot
+        with open(os.path.join(HERE, "partage.json"), "r", encoding="utf-8") as f:
+            cand.append(json.load(f))
+    except Exception:
+        pass
+    cand = [c for c in cand if isinstance(c, dict) and isinstance(c.get("doc"), dict)]
+    meilleur = max(cand, key=lambda c: (c.get("maj") or 0, c.get("v") or 0)) if cand else None
+    _P["doc"] = _p_sain(meilleur["doc"]) if meilleur else _p_vide()
+    _P["v"] = int(meilleur.get("v") or 0) if meilleur else 0
+    _P["maj"] = int(meilleur.get("maj") or 0) if meilleur else 0
+
+
+def _p_enregistrer():
+    try:
+        tmp = _p_fichier() + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"v": _P["v"], "maj": _P["maj"], "doc": _P["doc"]}, f, ensure_ascii=False)
+        os.replace(tmp, _p_fichier())
+    except Exception:
+        pass
+    _gh_planifier()
+
+
+def _p_ensemble(liste, ajout, retrait):
+    out = [x for x in liste if x not in set(retrait or [])]
+    for x in ajout or []:
+        if x not in out:
+            out.append(x)
+    return out
+
+
+def _p_appliquer(doc, patch):
+    """Applique un correctif : {cle: {onglet: {add: [...], del: [...]}}} ou {wl|hidden: {add, del}}."""
+    for tab, op in (patch.get("custom") or {}).items():
+        tab = _p_txt(tab, 28)
+        l = doc["custom"].get(tab, [])
+        dels = set(_p_txt(y, 40) for y in (op.get("del") or []))
+        l = [o for o in l if o["y"] not in dels]
+        for o in op.get("add") or []:
+            t = _p_titre(o)
+            if t and not any(x["y"] == t["y"] for x in l):
+                l.append(t)
+        if l or tab in doc["wl"]:
+            doc["custom"][tab] = l[:400]
+        else:
+            doc["custom"].pop(tab, None)
+    for tab, op in (patch.get("removed") or {}).items():
+        tab = _p_txt(tab, 28)
+        l = _p_ensemble(doc["removed"].get(tab, []), [_p_txt(y, 40) for y in op.get("add") or []], op.get("del"))
+        if l:
+            doc["removed"][tab] = l[:600]
+        else:
+            doc["removed"].pop(tab, None)
+    for k in ("wl", "hidden"):
+        op = patch.get(k) or {}
+        doc[k] = _p_ensemble(doc[k], [_p_txt(x, 28) for x in op.get("add") or []], op.get("del"))[:60]
+    for tab, l in (patch.get("order") or {}).items():
+        tab = _p_txt(tab, 28)
+        if isinstance(l, list) and l:
+            doc["order"][tab] = [_p_txt(y, 40) for y in l[:800]]
+        else:
+            doc["order"].pop(tab, None)
+    for tab in list(doc["custom"].keys()):   # une liste creee puis supprimee ne laisse rien
+        if not doc["custom"][tab] and tab not in doc["wl"]:
+            doc["custom"].pop(tab, None)
+    return doc
+
+
+@app.get("/api/partage")
+def partage_lire():
+    with _P_VERROU:
+        _p_charger()
+        d = {"v": _P["v"], "maj": _P["maj"], "doc": _P["doc"],
+             "github": _P_GH["etat"] if GH_TOKEN else "non configure"}
+    return JSONResponse(d, headers={"Cache-Control": "no-store"})
+
+
+@app.post("/api/partage")
+async def partage_ecrire(request: Request):
+    try:
+        corps = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "erreur": "corps illisible"}, status_code=400)
+    patch = corps.get("patch") if isinstance(corps, dict) else None
+    if not isinstance(patch, dict):
+        return JSONResponse({"ok": False, "erreur": "correctif manquant"}, status_code=400)
+    if len(json.dumps(patch)) > 200000:
+        return JSONResponse({"ok": False, "erreur": "correctif trop volumineux"}, status_code=413)
+    with _P_VERROU:
+        _p_charger()
+        _P["doc"] = _p_sain(_p_appliquer(_P["doc"], patch))
+        _P["v"] += 1
+        _P["maj"] = int(time.time() * 1000)
+        d = {"ok": True, "v": _P["v"], "maj": _P["maj"], "doc": _P["doc"]}
+    _p_enregistrer()
+    return JSONResponse(d, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/partage/etat")
+def partage_etat():
+    return {"github": "non configure" if not GH_TOKEN else _P_GH["etat"], "erreur": _P_GH["erreur"],
+            "branche": GH_BRANCHE if GH_TOKEN else None, "version": _P["v"]}
+
+
 # quelques noms d'usage que la denomination legale d'ICE ne laisse pas deviner
 ALIAS_CDS = {
     "lvmh": "lvmh moet hennessy louis vuitton",
@@ -1853,7 +2123,15 @@ def _page_ou_message(request: Request = None):
 
 @app.get("/")
 def index(request: Request):
+    # acces libre : la page d'introduction precede le terminal, servi sur /terminal
+    if INTRO and _ouvert():
+        return HTMLResponse(INTRO, headers={"Cache-Control": "no-store"})
     return _page_ou_message(request)
+
+
+@app.get("/intro")
+def intro_page():
+    return HTMLResponse(INTRO or "<p>intro.py absent</p>", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/terminal")
