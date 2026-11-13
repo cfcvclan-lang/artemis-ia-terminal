@@ -491,6 +491,171 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
   table.mon .c-opt{display:none}
   .hm{grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
 }
+
+/* =====================================================================
+   ERGONOMIE V2 : ordinateur et iPad
+   fiche redimensionnable ou en tiroir, colonne figee, densite tactile,
+   mode edition, recherche globale, alertes de cours, feuilles
+   ===================================================================== */
+html{-webkit-text-size-adjust:100%}
+body{-webkit-tap-highlight-color:transparent}
+button,select,.tab,.hmc,.chc{touch-action:manipulation}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+.fk kbd.fin{margin:0 0 0 7px;color:var(--fg-dim)}
+.fk[aria-pressed="true"] kbd.fin{color:inherit}
+#rafr{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px}
+#rafr .tour{display:inline-block;color:var(--amber)}
+#rafr.tourne .tour{animation:tourne .7s linear}
+@keyframes tourne{to{transform:rotate(360deg)}}
+#albtn,#palbtn{flex:0 0 auto}
+
+/* ---------- moniteur : colonne des noms figee, ligne au clavier ---------- */
+table.mon tbody tr{background:var(--bg)}
+table.mon tbody tr:nth-child(even){background:#070909}
+table.mon tbody tr:hover{background:#15110a}
+table.mon tbody tr[aria-selected="true"]{background:#1d1708}
+table.mon tbody td:first-child{position:sticky;left:0;z-index:2;background:inherit;
+  box-shadow:1px 0 0 var(--grid)}
+table.mon thead th:first-child{left:0;z-index:6}
+table.mon tbody tr[aria-selected="true"] td:first-child{box-shadow:inset 2px 0 0 var(--amber),1px 0 0 var(--grid)}
+.alrt{color:var(--amber);font-size:10px;margin-left:5px}
+
+/* ---------- fiche : largeur reglable, masquable ---------- */
+.right{flex:0 0 var(--pw,396px);max-width:62vw}
+.split{flex:0 0 6px;margin:0 -3px;z-index:8;cursor:col-resize;position:relative;touch-action:none}
+.split::after{content:"";position:absolute;top:0;bottom:0;left:2px;width:2px;background:transparent;transition:background .15s}
+.split:hover::after,.split.actif::after{background:var(--amber-dim)}
+body.nofiche .right,body.nofiche .split{display:none}
+body.resize,body.resize *{cursor:col-resize!important;user-select:none}
+.rhnav{display:none;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--grid);
+  background:var(--panel2);position:sticky;top:0;z-index:4}
+.rhnav .spacer{flex:1 1 auto}
+.voile{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:74}
+
+/* ---------- alertes de cours dans la fiche ---------- */
+.alform{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:7px}
+.alform input{background:#000;border:1px solid var(--grid2);color:var(--amber-soft);padding:3px 8px;
+  border-radius:2px;width:110px;font-variant-numeric:tabular-nums}
+.alrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:7px}
+.alliste{display:grid;gap:0}
+.alig{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;
+  padding:5px 2px;border-bottom:1px solid #101416;font-size:11.5px}
+.alig.cliq{cursor:pointer}
+.alig.cliq:hover{background:#15110a}
+.alig .co{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.alig .co b{color:var(--amber-soft);font-weight:500}
+.alig .di{color:var(--fg-dim);font-size:10.5px;white-space:nowrap}
+.alig.fait .di{color:var(--amber)}
+.alig.fait.nonvu{background:#1d1708}
+.alnote{color:var(--fg-dim);font-size:10.5px;padding:3px 0}
+
+/* ---------- feuilles (reglages, alertes, aide) et palette ---------- */
+.ov{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;
+  justify-content:center;padding:calc(64px + env(safe-area-inset-top,0px)) 14px 14px}
+.fe{width:min(620px,100%);max-height:calc(100% - 20px);overflow:auto;background:var(--panel);
+  border:1px solid var(--amber-dim);border-radius:3px;box-shadow:0 18px 50px rgba(0,0,0,.7)}
+.fe-tete{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--grid);
+  background:var(--panel2);position:sticky;top:0}
+.fe-tete b{font-family:var(--f-cond);font-size:17px;letter-spacing:.06em;color:var(--amber);flex:1 1 auto}
+.fe-corps{padding:6px 14px 14px}
+.fe-corps h5{margin:14px 0 7px;font-family:var(--f-cond);font-size:12.5px;letter-spacing:.13em;
+  color:var(--cyan);text-transform:uppercase;font-weight:600}
+.fe-ligne{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fe-note{color:var(--fg-dim);font-size:11px;line-height:1.55;margin-top:6px}
+.rac{display:grid;grid-template-columns:minmax(110px,auto) minmax(0,1fr);gap:5px 14px;font-size:11.5px}
+.rac kbd{font:inherit;color:var(--amber);background:#000;border:1px solid var(--grid2);border-radius:2px;
+  padding:0 6px;white-space:nowrap;justify-self:start}
+.rac span{color:var(--fg)}
+.pal-in{width:100%;background:#000;border:0;border-bottom:1px solid var(--amber-dim);color:var(--amber-soft);
+  padding:13px 16px;font-size:15px;outline:none}
+.pal-res{max-height:min(60vh,520px);overflow:auto;padding:4px 0}
+.pal-grp{padding:8px 16px 3px;font-size:9.5px;letter-spacing:.12em;color:var(--cyan);text-transform:uppercase}
+.pal-it{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:baseline;width:100%;
+  text-align:left;background:none;border:0;padding:7px 16px;cursor:pointer;color:var(--fg)}
+.pal-it .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--amber-soft)}
+.pal-it .nm i{font-style:normal;color:var(--fg-dim);font-size:10.5px;margin-left:7px}
+.pal-it .px{font-variant-numeric:tabular-nums;color:var(--fg)}
+.pal-it .vr{font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
+.pal-it[aria-selected="true"]{background:#1d1708;box-shadow:inset 2px 0 0 var(--amber)}
+.pal-pied{display:flex;gap:14px;flex-wrap:wrap;padding:8px 16px;border-top:1px solid var(--grid);
+  font-size:10.5px;color:var(--fg-dim)}
+.pal-pied kbd{font:inherit;color:var(--amber)}
+.pal-vide{padding:16px;color:var(--fg-dim)}
+
+/* ---------- mode edition : poignees et croix toujours visibles ---------- */
+body.edit table.mon tbody .poign,body.edit table.mon tbody .rmv{visibility:visible}
+body.edit table.mon tbody .poign{color:var(--amber);touch-action:none;cursor:grab}
+body.edit .tab .x{color:var(--down)}
+#editbtn[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#000;font-weight:600}
+tr.fantome{opacity:.35}
+
+/* ---------- densite confort : cibles tactiles ---------- */
+body.confort{font-size:13px}
+body.confort .fk{padding:8px 12px;min-height:36px;font-size:12px}
+body.confort .rb{padding:6px 10px;min-height:32px;font-size:11.5px}
+body.confort .tab{padding:11px 16px;font-size:15px}
+body.confort .srch,body.confort .src-pick{min-height:36px;font-size:13px}
+body.confort .srch{width:200px}
+body.confort table.mon{font-size:13px}
+body.confort table.mon tbody td{padding:9px 9px}
+body.confort table.mon thead th{padding:8px 9px;font-size:13px}
+body.confort .rmv{font-size:18px;padding:4px 8px}
+body.confort .poign{font-size:15px;padding:4px 6px}
+body.confort .hmc{padding:12px 10px}
+body.confort .pal-it{padding:12px 16px}
+body.confort .alig{padding:9px 2px}
+body.confort .alform input{min-height:34px;width:130px}
+body.confort .kv{font-size:12.5px;gap:4px 10px}
+body.confort .tape-in{padding:6px 0}
+
+/* ---------- tiroir : ecrans de largeur moyenne (iPad portrait, petit portable) ---------- */
+@media (max-width:1100px){
+  body{overflow:hidden;display:flex;height:100%}
+  .main{display:flex;overflow:hidden;min-height:0}
+  .left{display:flex;overflow:hidden}
+  .scroll{display:block;overflow:auto;min-height:0}
+  .tape{position:static}
+  .split{display:none}
+  .right,body.nofiche .right{
+    display:flex;position:fixed;top:0;right:0;bottom:0;z-index:75;
+    width:min(460px,94vw);max-width:none;flex:none;border-left:1px solid var(--amber-dim);border-top:0;
+    overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+    transform:translateX(105%);transition:transform .22s ease-out;box-shadow:-18px 0 40px rgba(0,0,0,.6)}
+  body.fiche .right{transform:none}
+  .rhnav{display:flex}
+  table.mon .c-opt{display:table-cell}
+}
+@media (max-width:700px){ table.mon .c-opt{display:none} }
+@media (min-width:1101px){ .voile{display:none} }
+@media (prefers-reduced-motion:reduce){ .right{transition:none} #rafr.tourne .tour{animation:none} }
+/* tactile hors mode edition : pas de croix ni de poignee accessibles par erreur */
+body.confort:not(.edit) table.mon tbody .rmv,body.confort:not(.edit) table.mon tbody .poign{display:none}
+body.confort:not(.edit) .tab .x{display:none}
+body.confort .fkeys{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;max-width:100%;-webkit-overflow-scrolling:touch}
+body.confort .fkeys::-webkit-scrollbar{display:none}
+body.confort .fk{flex:0 0 auto}
+body.confort #palkbd{display:none}
+/* barre d'outils sur une ligne : les vues F1 a F10 defilent si la place manque */
+#cfgbtn{display:none}
+.fkeys.deborde{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 36px),transparent)}
+@media (min-width:1101px){
+  .tools{flex-wrap:nowrap}
+  .fkeys{flex:0 1 auto;min-width:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .fkeys::-webkit-scrollbar{display:none}
+  .fkeys .fk{flex:0 0 auto}
+  .tools>*:not(.fkeys):not(.spacer){flex:0 0 auto}
+  .srch{width:150px}
+}
+@media (max-width:1100px){
+  .fkeys{flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .fkeys::-webkit-scrollbar{display:none}
+  .fkeys .fk{flex:0 0 auto}
+}
+@media (min-width:1281px){ .places{flex:1 1 0;min-width:160px;max-width:none} header.cmd>.spacer{display:none} }
+/* tactile : les dix vues tiennent sur leur propre ligne, sans defilement cache */
+body.confort .tools{flex-wrap:wrap}
+body.confort .fkeys{flex:1 1 100%}
 </style>
 </head>
 <body>
@@ -499,6 +664,8 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
   <div class="cmd-sep"></div>
   <div class="places" id="places" aria-label="Places boursieres"></div>
   <div class="spacer"></div>
+  <button class="fk" type="button" id="palbtn" title="Rechercher une valeur, une liste, une vue ou une commande">RECHERCHE<kbd class="fin" id="palkbd">Ctrl K</kbd></button>
+  <button class="fk" type="button" id="albtn" title="Mes alertes de cours">ALERTES<span class="pastille" id="al-pastille" hidden></span></button>
   <button class="fk" type="button" id="ping" aria-pressed="false" title="Signal sonore a l'ouverture et a la cloture des places"><span aria-hidden="true">♪</span> SON</button>
   <span class="moi" id="moi" hidden></span>
   <button class="fk" type="button" id="deco" hidden>QUITTER</button>
@@ -512,6 +679,7 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
     </select>
   </label>
   <span class="signe" title="Othman Bakhtaoui">Designed by OB</span>
+  <button class="fk" type="button" id="rafr" title="Actualiser maintenant (R). Le chiffre indique les secondes avant la prochaine actualisation."><span class="tour" aria-hidden="true">&#8635;</span><span class="cd tnum" id="cd">15</span></button>
   <span class="led"><span class="dot" id="led"></span><span id="led-txt">INIT</span></span>
 </header>
 
@@ -546,6 +714,9 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
   <input class="srch" id="q" type="search" placeholder="Filtrer un sous-jacent" aria-label="Filtrer">
   <button class="fk" type="button" id="ordbtn" title="Revenir a mon ordre manuel">ORDRE</button>
   <button class="fk" type="button" id="addbtn">+ TITRE</button>
+  <button class="fk" type="button" id="editbtn" aria-pressed="false" title="Reordonner ou retirer des valeurs et des listes (E)">MODIFIER</button>
+  <button class="fk" type="button" id="fichebtn" aria-pressed="true" title="Afficher ou masquer la fiche instrument (I)">FICHE</button>
+  <button class="fk" type="button" id="plusbtn" title="Densite, ecran, export CSV, raccourcis">PLUS</button>
   <button class="fk" type="button" id="cfgbtn">BACKEND</button>
 </div>
 
@@ -596,7 +767,15 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
     </div>
   </div>
 
+  <div class="split" id="split" role="separator" aria-orientation="vertical" title="Glisser pour regler la largeur de la fiche, double-clic pour revenir a l'origine"></div>
   <aside class="right" id="right" aria-label="Fiche instrument">
+    <div class="rhnav" id="rhnav">
+      <button class="rb" type="button" id="d-prec" title="Valeur precedente">&#9664; PREC.</button>
+      <button class="rb" type="button" id="d-suiv" title="Valeur suivante">SUIV. &#9654;</button>
+      <span class="spacer"></span>
+      <button class="rb" type="button" id="d-plein">PLEIN ECRAN</button>
+      <button class="rb" type="button" id="d-fermer">FERMER</button>
+    </div>
     <div class="rh">
       <h2 id="d-name">Selectionnez une ligne</h2>
       <div class="sub" id="d-sub">Le detail, le graphique et le consensus s'affichent ici.</div>
@@ -632,6 +811,20 @@ canvas{display:block;width:100%;max-width:100%;height:auto;background:#000;borde
       </div>
       <div class="cvwrap"><canvas id="cv" width="760" height="330" role="img" aria-label="Historique de cours"></canvas>
         <div class="readout" id="cv-read" hidden></div></div>
+    </div>
+
+    <div class="sec" id="al-sec">
+      <h3>Alertes de cours</h3>
+      <div class="alform" id="al-form">
+        <input id="al-niv" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="Niveau de l'alerte" placeholder="niveau">
+        <button class="rb" type="button" id="al-sup">POSER L'ALERTE</button>
+      </div>
+      <div class="alrap" id="al-rap" aria-label="Alerte a un ecart du cours actuel">
+        <button class="rb" type="button" data-ecart="-5">-5%</button><button class="rb" type="button" data-ecart="-2">-2%</button>
+        <button class="rb" type="button" data-ecart="-1">-1%</button><button class="rb" type="button" data-ecart="1">+1%</button>
+        <button class="rb" type="button" data-ecart="2">+2%</button><button class="rb" type="button" data-ecart="5">+5%</button>
+      </div>
+      <div class="alliste" id="al-liste"></div>
     </div>
 
     <div class="sec">
@@ -3139,7 +3332,7 @@ function select(y,byUser){
   });
   ensureHist(y).then(renderDetail);
   renderDetail(); loadChart(); loadCons(y);
-  if(byUser && window.innerWidth<=860) $("right").scrollIntoView({behavior:"smooth",block:"start"});
+  if(byUser) ouvrirFiche();
 }
 (function(){
   var sc=$("scroll"), src=null;
@@ -4037,6 +4230,625 @@ if(SESSION&&SESSION.role==="admin"){ chargerComptes(true); setInterval(function(
 clocks(); setInterval(clocks,1000);
 refresh().then(warmHist);
 setInterval(loop,1000);
+
+/* =====================================================================
+   ERGONOMIE V2 : ordinateur et iPad
+   ===================================================================== */
+var MQ_TACTILE=window.matchMedia("(pointer:coarse)");
+var MQ_TIROIR=window.matchMedia("(max-width:1100px)");
+var EST_MAC=/Mac|iPhone|iPad/.test(navigator.platform||"")||/Mac OS/.test(navigator.userAgent||"");
+cfg.alertes=cfg.alertes||[];
+cfg.recents=cfg.recents||[];
+function enTiroir(){ return MQ_TIROIR.matches; }
+function saisieEnCours(t){
+  t=t||document.activeElement;
+  return !!(t&&(t.tagName==="INPUT"||t.tagName==="SELECT"||t.tagName==="TEXTAREA"||t.isContentEditable));
+}
+
+/* ---------- densite ---------- */
+function appliquerDensite(){
+  var d=cfg.dens||"auto";
+  var confort = d==="confort" || (d==="auto" && MQ_TACTILE.matches);
+  document.body.classList.toggle("confort",confort);
+}
+if(MQ_TACTILE.addEventListener) MQ_TACTILE.addEventListener("change",function(){ appliquerDensite(); redraw(); });
+
+/* ---------- fiche : largeur, masquage, tiroir ---------- */
+(function(){
+  var v=document.createElement("div"); v.className="voile"; v.id="voile"; v.hidden=true;
+  document.body.appendChild(v);
+  v.addEventListener("click",function(){ fermerFiche(); });
+})();
+function majBoutonFiche(){
+  var b=$("fichebtn"); if(!b) return;
+  b.setAttribute("aria-pressed", enTiroir() ? (document.body.classList.contains("fiche")?"true":"false")
+                                             : (cfg.pcol?"false":"true"));
+}
+function ouvrirFiche(){
+  if(!enTiroir()) return;
+  document.body.classList.add("fiche"); $("voile").hidden=false;
+  majBoutonFiche(); setTimeout(redraw,60);
+}
+function fermerFiche(){ document.body.classList.remove("fiche"); $("voile").hidden=true; majBoutonFiche(); }
+function appliquerFiche(){
+  document.body.classList.toggle("nofiche", !!cfg.pcol);
+  if(cfg.pw) document.documentElement.style.setProperty("--pw",cfg.pw+"px");
+  else document.documentElement.style.removeProperty("--pw");
+  majBoutonFiche(); setTimeout(redraw,40);
+}
+function basculerFiche(){
+  if(enTiroir()){ if(document.body.classList.contains("fiche")) fermerFiche(); else ouvrirFiche(); return; }
+  cfg.pcol=!cfg.pcol; save(); appliquerFiche();
+}
+if(MQ_TIROIR.addEventListener) MQ_TIROIR.addEventListener("change",function(){ fermerFiche(); appliquerFiche(); });
+$("fichebtn").addEventListener("click",basculerFiche);
+$("d-fermer").addEventListener("click",fermerFiche);
+$("d-prec").addEventListener("click",function(){ pas(-1); });
+$("d-suiv").addEventListener("click",function(){ pas(1); });
+$("d-plein").addEventListener("click",function(){ if(sel) ouvrirPleinEcran(); });
+(function(){
+  /* separateur : glisser pour regler la largeur de la fiche */
+  var sp=$("split"), x0=0, w0=0, actif=false;
+  sp.addEventListener("pointerdown",function(e){
+    actif=true; x0=e.clientX; w0=$("right").getBoundingClientRect().width;
+    sp.classList.add("actif"); document.body.classList.add("resize");
+    try{ sp.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  sp.addEventListener("pointermove",function(e){
+    if(!actif) return;
+    var w=Math.round(Math.max(300,Math.min(window.innerWidth*0.62, w0+(x0-e.clientX))));
+    document.documentElement.style.setProperty("--pw",w+"px"); cfg.pw=w;
+    clearTimeout(sp.__t); sp.__t=setTimeout(redraw,60);
+  });
+  function fin(){ if(!actif) return; actif=false; sp.classList.remove("actif");
+    document.body.classList.remove("resize"); save(); redraw(); }
+  sp.addEventListener("pointerup",fin); sp.addEventListener("pointercancel",fin);
+  sp.addEventListener("dblclick",function(){ cfg.pw=null; save(); appliquerFiche(); });
+})();
+(function(){
+  /* tiroir : un glissement vers la droite le referme (hors graphique) */
+  var r=$("right"), d=null;
+  r.addEventListener("touchstart",function(e){
+    if(!enTiroir()||e.touches.length!==1||e.target.closest("canvas,input,select")){ d=null; return; }
+    d={x:e.touches[0].clientX,y:e.touches[0].clientY};
+  },{passive:true});
+  r.addEventListener("touchend",function(e){
+    if(!d) return; var t=e.changedTouches[0], dx=t.clientX-d.x, dy=Math.abs(t.clientY-d.y); d=null;
+    if(dx>80&&dy<60) fermerFiche();
+  },{passive:true});
+})();
+
+/* ---------- navigation dans la liste ---------- */
+function lignesVisibles(){
+  var sel_="";
+  if(cfg.view==="mon") sel_="#tbody tr[data-y]";
+  else if(cfg.view==="heat") sel_="#heat [data-y]";
+  else if(cfg.view==="charts") sel_="#charts [data-y]";
+  else if(cfg.view==="perf") sel_="#perfview tr[data-y]";
+  return sel_ ? [].slice.call(document.querySelectorAll(sel_)) : [];
+}
+function pas(n){
+  var els=lignesVisibles();
+  var ys=els.length ? els.map(function(e){ return e.getAttribute("data-y"); })
+                    : rows().map(function(r){ return r.o.y; });
+  if(!ys.length) return;
+  var i=ys.indexOf(sel);
+  i = i<0 ? (n>0?0:ys.length-1) : Math.max(0,Math.min(ys.length-1,i+n));
+  select(ys[i],false);
+  if(els[i]&&els[i].scrollIntoView) els[i].scrollIntoView({block:"nearest"});
+}
+function majBoutonsVue(){
+  document.querySelectorAll(".fk[data-view]").forEach(function(x){
+    x.setAttribute("aria-pressed", x.getAttribute("data-view")===cfg.view?"true":"false"); });
+}
+function allerVue(v){
+  var b=document.querySelector('.fk[data-view="'+v+'"]');
+  if(b&&!b.hidden) b.click();
+}
+function changerListe(n){
+  var i=TABS.indexOf(cfg.tab), k=TABS.length; if(!k) return;
+  cfg.tab=TABS[(i+n+k)%k]; save(); buildTabs(); renderAll(); warmHist(); refresh();
+  var a=document.querySelector('.tab[aria-selected="true"]'); if(a&&a.scrollIntoView) a.scrollIntoView({block:"nearest",inline:"nearest"});
+  toast("Liste "+cfg.tab);
+}
+function listesDe(y){
+  return TABS.filter(function(t){ return t!=="OVERALL" && (UNIVERSE[t]||[]).some(function(o){ return o.y===y; }); });
+}
+function noterRecent(y){
+  cfg.recents=[y].concat((cfg.recents||[]).filter(function(x){ return x!==y; })).slice(0,8); save();
+}
+function allerA(y){
+  if(!SYMS[y]) return;
+  var change=false;
+  if(!currentList().some(function(o){ return o.y===y; })){ cfg.tab=listesDe(y)[0]||"OVERALL"; change=true; }
+  if(cfg.q){ cfg.q=""; $("q").value=""; change=true; }
+  if(!{mon:1,heat:1,perf:1,charts:1}[cfg.view]){ cfg.view="mon"; majBoutonsVue(); change=true; }
+  save();
+  if(change){ buildTabs(); renderAll(); warmHist(); refresh(); }
+  select(y,true); noterRecent(y);
+  setTimeout(function(){
+    var el=document.querySelector('#scroll [data-y="'+y.replace(/["\\]/g,"\\$&")+'"]');
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:"center"});
+  },80);
+}
+
+/* ---------- actualisation manuelle et compte a rebours ---------- */
+function actualiser(){
+  cdLeft=15; var b=$("rafr"); b.classList.remove("tourne"); void b.offsetWidth; b.classList.add("tourne");
+  refresh().then(warmHist);
+}
+$("rafr").addEventListener("click",actualiser);
+setInterval(function(){ var c=$("cd"); if(c) c.textContent=String(Math.max(0,cdLeft)); },1000);
+
+/* ---------- feuilles modales ---------- */
+var FEUILLE=null;
+function ouvrirFeuille(titre,html,brancher){
+  fermerFeuille();
+  var ov=document.createElement("div"); ov.className="ov"; ov.id="feuille";
+  ov.innerHTML='<div class="fe" role="dialog" aria-modal="true" aria-label="'+esc(titre)+'">'+
+    '<div class="fe-tete"><b>'+esc(titre)+'</b><button class="rb" type="button" id="fe-x">FERMER</button></div>'+
+    '<div class="fe-corps">'+html+"</div></div>";
+  document.body.appendChild(ov); FEUILLE=ov;
+  ov.addEventListener("click",function(e){ if(e.target===ov) fermerFeuille(); });
+  $("fe-x").addEventListener("click",fermerFeuille);
+  if(brancher) brancher(ov.querySelector(".fe-corps"));
+  return ov;
+}
+function fermerFeuille(){ if(FEUILLE){ FEUILLE.remove(); FEUILLE=null; } }
+
+/* ---------- aide ---------- */
+function ouvrirAide(){
+  var M=EST_MAC?"\u2318":"Ctrl";
+  var r=function(k,t){ return "<kbd>"+k+"</kbd><span>"+t+"</span>"; };
+  ouvrirFeuille("Raccourcis et gestes",
+    '<h5>Clavier</h5><div class="rac">'+
+    r(M+" K","Recherche globale : valeur, liste, vue ou commande")+
+    r("\u2191  \u2193","Valeur precedente ou suivante dans la vue")+
+    r("Maj \u2190  \u2192","Liste precedente ou suivante")+
+    r("Entree","Graphique plein ecran de la valeur affichee")+
+    r("F1 a F10","Changer de vue")+
+    r("/","Filtrer la liste")+
+    r("A","Poser une alerte de cours sur la valeur affichee")+
+    r("I","Afficher ou masquer la fiche")+
+    r("R","Actualiser tout de suite")+
+    r("E","Mode edition")+
+    r("?","Cette aide")+
+    r("Echap","Fermer la fenetre, le tiroir ou le plein ecran")+
+    '</div><h5>Souris</h5><div class="rac">'+
+    r("Separateur","Glisser le bord gauche de la fiche pour regler sa largeur, double-clic pour revenir a l'origine")+
+    r("Graphique","Glisser pour zoomer, double-clic pour annuler")+
+    r("Ligne","Glisser par la poignee pour reordonner")+
+    '</div><h5>Tactile</h5><div class="rac">'+
+    r("Ligne","Un appui ouvre la fiche, un glissement vers la droite la referme")+
+    r("Graphique","Un doigt deplace le reticule, deux doigts zooment, double appui pour annuler")+
+    r("MODIFIER","Affiche les poignees et les croix pour reordonner ou retirer au doigt")+
+    "</div>");
+}
+
+/* ---------- reglages ---------- */
+var VERROU=null;
+function eveil(){
+  if(!cfg.eveil||!("wakeLock" in navigator)||document.hidden) return;
+  navigator.wakeLock.request("screen").then(function(l){ VERROU=l; }).catch(function(){});
+}
+function finEveil(){ if(VERROU){ try{ VERROU.release(); }catch(e){} VERROU=null; } }
+document.addEventListener("visibilitychange",function(){ if(!document.hidden) eveil(); });
+function exporterCsv(){
+  var n=function(v,d){ return v==null||!isFinite(v)?"":v.toFixed(d).replace(".",","); };
+  var L=[["Nom","Ticker","Devise","Dernier","Variation","% jour","1 sem %","1 mois %","YTD %","1 an %","3 ans %","Vol 1 an %","Heure"]];
+  rows().forEach(function(r){
+    var q=r.q||{};
+    L.push([r.o.n,r.o.y,q.cur||r.o.c||"",n(q.p,decs(q.p)),n(q.chg,decs(q.p)),n(r.d,2),n(r.w,2),n(r.m,2),
+      n(r.ytd,2),n(r.y1,2),n(r.y3,2),n(r.vol1a,1),q.t?hhmmss(new Date(q.t),"Europe/Paris"):""]);
+  });
+  var csv="\ufeff"+L.map(function(l){ return l.map(function(c){
+    c=String(c); return /[;"\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c; }).join(";"); }).join("\r\n");
+  try{
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+    a.download="artemis-"+cfg.tab.replace(/[^A-Za-z0-9_-]/g,"_")+"-"+isoAuj()+".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    toast("Liste "+cfg.tab+" exportee ("+(L.length-1)+" lignes)"+(mode==="demo"?", cours simules.":"."));
+  }catch(e){ toast("Export impossible depuis cette page."); }
+}
+function ouvrirReglages(){
+  var d=cfg.dens||"auto", veille=("wakeLock" in navigator);
+  var b=function(v,l){ return '<button class="rb" type="button" data-dens="'+v+'" aria-pressed="'+(d===v?"true":"false")+'">'+l+"</button>"; };
+  ouvrirFeuille("Reglages et outils",
+    '<h5>Densite d\'affichage</h5><div class="fe-ligne">'+b("auto","AUTOMATIQUE")+b("compact","COMPACTE")+b("confort","CONFORT")+"</div>"+
+    '<div class="fe-note">Automatique choisit Confort sur ecran tactile et Compacte a la souris.</div>'+
+    "<h5>Fiche instrument</h5>"+
+    '<div class="fe-ligne"><button class="rb" type="button" id="rg-pw">LARGEUR D\'ORIGINE</button></div>'+
+    '<div class="fe-note">Sur grand ecran, la fiche se regle en glissant son bord gauche. En dessous de 1100 pixels de large, elle s\'ouvre en tiroir.</div>'+
+    "<h5>Ecran</h5>"+
+    '<div class="fe-ligne"><button class="rb" type="button" id="rg-eveil" aria-pressed="'+(cfg.eveil?"true":"false")+'"'+(veille?"":" disabled")+'>GARDER L\'ECRAN ALLUME</button></div>'+
+    '<div class="fe-note">'+(veille?"Empeche la mise en veille tant que le terminal est au premier plan, utile sur un iPad pose sur un support."
+                                   :"Ce navigateur ne permet pas de bloquer la mise en veille.")+"</div>"+
+    "<h5>Source des donnees</h5>"+
+    '<div class="fe-ligne"><button class="rb" type="button" id="rg-src">REGLER LE BACKEND ET LA SOURCE</button></div>'+
+    "<h5>Outils</h5>"+
+    '<div class="fe-ligne"><button class="rb" type="button" id="rg-csv">EXPORTER LA LISTE EN CSV</button>'+
+    '<button class="rb" type="button" id="rg-aide">RACCOURCIS ET GESTES</button></div>'+
+    '<div class="fe-note">Le CSV reprend la liste '+esc(cfg.tab)+" telle qu'elle est filtree et triee, au format Excel francais.</div>",
+    function(c){
+      c.addEventListener("click",function(e){
+        var x=e.target.closest("[data-dens]");
+        if(x){ cfg.dens=x.getAttribute("data-dens"); save(); appliquerDensite(); redraw();
+          c.querySelectorAll("[data-dens]").forEach(function(k){ k.setAttribute("aria-pressed", k===x?"true":"false"); }); }
+      });
+      $("rg-pw").addEventListener("click",function(){ cfg.pw=null; cfg.pcol=false; save(); appliquerFiche(); toast("Fiche remise a sa largeur d'origine."); });
+      $("rg-eveil").addEventListener("click",function(){
+        cfg.eveil=!cfg.eveil; save(); this.setAttribute("aria-pressed", cfg.eveil?"true":"false");
+        if(cfg.eveil){ eveil(); toast("L'ecran reste allume tant que le terminal est affiche."); } else finEveil();
+      });
+      $("rg-csv").addEventListener("click",function(){ fermerFeuille(); exporterCsv(); });
+      $("rg-aide").addEventListener("click",ouvrirAide);
+      $("rg-src").addEventListener("click",function(){ fermerFeuille(); if(!document.getElementById("basein")) askBase(); });
+    });
+}
+$("plusbtn").addEventListener("click",ouvrirReglages);
+
+/* ---------- alertes de cours ---------- */
+function alerteActive(y){ return (cfg.alertes||[]).some(function(a){ return a.y===y && !a.fait; }); }
+function lireNombre(s){
+  s=String(s||"").replace(/[\s\u00a0\u202f]/g,"").replace(",",".");
+  var v=parseFloat(s); return isFinite(v)?v:null;
+}
+function libelleAlerte(a){ return (a.sens==="sup"?"au-dessus de ":"en dessous de ")+fmt(a.niv,decs(a.niv)); }
+function poserAlerte(y,niv){
+  var q=Q[y]; if(niv==null||!isFinite(niv)||niv<=0){ toast("Saisissez un niveau valide."); return; }
+  var p=q&&q.p; if(p==null){ toast("Pas de cours disponible pour cette valeur."); return; }
+  if(Math.abs(niv-p)/p<1e-6){ toast("Le niveau est egal au cours actuel."); return; }
+  var a={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),y:y,sens:niv>p?"sup":"inf",niv:niv,cree:Date.now()};
+  cfg.alertes.push(a); save();
+  toast("Alerte posee : "+((SYMS[y]||{}).n||y)+" "+libelleAlerte(a)+".");
+  try{ if("Notification" in window && Notification.permission==="default") Notification.requestPermission(); }catch(e){}
+  renderAlertes(); majPastilleAlertes(); if(cfg.view==="mon") renderTable();
+}
+function retirerAlerte(id){
+  cfg.alertes=(cfg.alertes||[]).filter(function(a){ return a.id!==id; }); save();
+  renderAlertes(); majPastilleAlertes(); if(cfg.view==="mon") renderTable();
+}
+function ligneAlerte(a,avecNom){
+  var o=SYMS[a.y]||{n:a.y};
+  var etat=a.fait ? ("declenchee "+hhmmss(new Date(a.fait),"Europe/Paris").slice(0,5)+" a "+fmt(a.px,decs(a.px)))
+                  : (function(){ var q=Q[a.y]; if(!q||q.p==null) return "en attente";
+                      return "ecart "+pct((a.niv/q.p-1)*100); })();
+  return '<div class="alig'+(a.fait?" fait":"")+(a.fait&&!a.vu?" nonvu":"")+(avecNom?" cliq":"")+'" data-al="'+esc(a.id)+'" data-aly="'+esc(a.y)+'">'+
+    '<span class="co">'+(avecNom?"<b>"+esc(o.n)+"</b> ":"")+(a.sens==="sup"?"\u25b2 ":"\u25bc ")+libelleAlerte(a)+"</span>"+
+    '<span class="di">'+etat+"</span>"+
+    '<button class="rmv" type="button" data-alx="'+esc(a.id)+'" title="Supprimer cette alerte" style="visibility:visible">&times;</button></div>';
+}
+function renderAlertes(){
+  var el=$("al-liste"); if(!el) return;
+  var o=SYMS[sel], nf=o&&o.nf;
+  $("al-form").hidden=!!nf; $("al-rap").hidden=!!nf;
+  var L=(cfg.alertes||[]).filter(function(a){ return a.y===sel; });
+  el.innerHTML = L.length ? L.map(function(a){ return ligneAlerte(a,false); }).join("")
+    : '<div class="alnote">'+(nf?"Valeur non cotee, pas d'alerte possible.":"Aucune alerte sur cette valeur. Saisissez un niveau ou touchez un ecart.")+"</div>";
+}
+function majPastilleAlertes(){
+  var n=(cfg.alertes||[]).filter(function(a){ return a.fait && !a.vu; }).length;
+  var p=$("al-pastille"); if(p){ p.hidden=!n; p.textContent=String(n); }
+  document.title=(n?"("+n+") ":"")+"ARTEMIS IA TERMINAL";
+}
+function verifAlertes(){
+  if(mode==="demo") return;                      /* jamais sur des cours simules */
+  var touche=[];
+  (cfg.alertes||[]).forEach(function(a){
+    if(a.fait) return;
+    var q=Q[a.y]; if(!q||q.p==null) return;
+    if((a.sens==="sup"&&q.p>=a.niv)||(a.sens==="inf"&&q.p<=a.niv)){ a.fait=Date.now(); a.px=q.p; a.vu=false; touche.push(a); }
+  });
+  if(!touche.length) return;
+  save();
+  var txt=touche.slice(0,2).map(function(a){
+    return ((SYMS[a.y]||{}).n||a.y)+" passe "+libelleAlerte(a)+" (dernier "+fmt(a.px,decs(a.px))+")"; }).join("  |  ");
+  if(touche.length>2) txt+="  et "+(touche.length-2)+" autre(s)";
+  toast("ALERTE  "+txt);
+  try{ cloche(true); }catch(e){}
+  try{
+    if("Notification" in window && Notification.permission==="granted" && document.hidden)
+      new Notification("ARTEMIS IA TERMINAL : alerte de cours",{body:txt});
+  }catch(e){}
+  majPastilleAlertes(); renderAlertes(); if(cfg.view==="mon") renderTable();
+}
+/* les valeurs sous alerte restent dans le flux, meme hors de la liste ouverte */
+var activeSymsOrig=activeSyms;
+activeSyms=function(){
+  var m={}; activeSymsOrig().forEach(function(y){ m[y]=1; });
+  (cfg.alertes||[]).forEach(function(a){ if(!a.fait&&!nofeed(a.y)) m[a.y]=1; });
+  return Object.keys(m);
+};
+function ouvrirAlertes(){
+  var L=(cfg.alertes||[]).slice().sort(function(a,b){
+    var fa=a.fait?(a.vu?2:0):1, fb=b.fait?(b.vu?2:0):1;
+    return fa-fb || (b.fait||b.cree)-(a.fait||a.cree); });
+  var corps = L.length
+    ? '<div class="alliste" id="al-toutes">'+L.map(function(a){ return ligneAlerte(a,true); }).join("")+"</div>"+
+      '<div class="fe-ligne" style="margin-top:12px"><button class="rb" type="button" id="al-purge">EFFACER LES ALERTES DECLENCHEES</button></div>'
+    : '<div class="fe-note">Aucune alerte. Ouvrez la fiche d\'une valeur, rubrique Alertes de cours, puis saisissez un niveau ou touchez un ecart en pourcentage.</div>';
+  corps+='<div class="fe-note">Les alertes sont verifiees a chaque actualisation, toutes les 15 secondes, tant que le terminal est ouvert, '+
+    "et seulement sur flux reel. Elles suivent votre compte d'un appareil a l'autre.</div>";
+  ouvrirFeuille("Alertes de cours",corps,function(c){
+    c.addEventListener("click",function(e){
+      var x=e.target.closest("[data-alx]");
+      if(x){ e.stopPropagation(); retirerAlerte(x.getAttribute("data-alx")); var l=x.closest(".alig"); if(l) l.remove(); return; }
+      if(e.target.id==="al-purge"){
+        cfg.alertes=cfg.alertes.filter(function(a){ return !a.fait; }); save(); majPastilleAlertes(); ouvrirAlertes(); return; }
+      var r=e.target.closest("[data-aly]");
+      if(r){ fermerFeuille(); allerA(r.getAttribute("data-aly")); }
+    });
+  });
+  var vus=false; (cfg.alertes||[]).forEach(function(a){ if(a.fait&&!a.vu){ a.vu=true; vus=true; } });
+  if(vus){ save(); majPastilleAlertes(); }
+}
+$("albtn").addEventListener("click",ouvrirAlertes);
+$("al-sup").addEventListener("click",function(){ if(sel) poserAlerte(sel,lireNombre($("al-niv").value)); });
+$("al-niv").addEventListener("keydown",function(e){ if(e.key==="Enter"&&sel) poserAlerte(sel,lireNombre(this.value)); });
+$("al-rap").addEventListener("click",function(e){
+  var b=e.target.closest("[data-ecart]"); if(!b||!sel) return;
+  var q=Q[sel]; if(!q||q.p==null) return;
+  var niv=q.p*(1+(+b.getAttribute("data-ecart"))/100);
+  poserAlerte(sel,+niv.toFixed(decs(niv)));
+});
+$("al-liste").addEventListener("click",function(e){
+  var x=e.target.closest("[data-alx]"); if(x) retirerAlerte(x.getAttribute("data-alx"));
+});
+
+/* ---------- surcouches : fiche, tableau, actualisation ---------- */
+var renderDetailOrig=renderDetail;
+renderDetail=function(){
+  renderDetailOrig(); renderAlertes();
+  var q=sel&&Q[sel], ni=$("al-niv");
+  if(ni&&q&&q.p!=null&&document.activeElement!==ni) ni.placeholder=fmt(q.p,decs(q.p));
+};
+var renderTableOrig=renderTable;
+renderTable=function(){
+  renderTableOrig();
+  if(!(cfg.alertes||[]).length) return;
+  document.querySelectorAll("#tbody tr[data-y]").forEach(function(tr){
+    if(alerteActive(tr.getAttribute("data-y"))){
+      var td=tr.firstElementChild, tk=td&&td.querySelector(".tkr");
+      if(tk) tk.insertAdjacentHTML("afterend",'<span class="alrt" title="Alerte de cours active">\u25c6</span>');
+    }
+  });
+};
+var refreshOrig=refresh;
+refresh=function(){ return refreshOrig().then(function(){ verifAlertes(); if(FEUILLE&&$("pal-in")) palRendre(); }); };
+var selectOrig=select;
+select=function(y,byUser){ selectOrig(y,byUser); if(byUser&&!nofeed(y)) noterRecent(y); };
+
+/* ---------- recherche globale ---------- */
+var PAL={items:[],i:0};
+var VUES=[["mon","F1","Moniteur"],["heat","F2","Heatmap"],["perf","F3","Matrice de performance"],["charts","F4","Graphiques"],
+  ["rates","F5","Taux"],["news","F6","Actualite"],["scan","F7","Scanner"],["cal","F8","Calendrier"],["credit","F9","Credit"],["admin","F10","Administration"]];
+function sansAccent(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
+function palCommandes(){
+  return [
+    {g:"Commandes",l:"Actualiser les cours",k:"R",f:actualiser},
+    {g:"Commandes",l:"Alertes de cours",k:"",f:ouvrirAlertes},
+    {g:"Commandes",l:"Afficher ou masquer la fiche",k:"I",f:basculerFiche},
+    {g:"Commandes",l:"Graphique plein ecran",k:"Entree",f:function(){ if(sel) ouvrirPleinEcran(); }},
+    {g:"Commandes",l:"Exporter la liste en CSV",k:"",f:exporterCsv},
+    {g:"Commandes",l:"Mode edition des listes",k:"E",f:basculerEdition},
+    {g:"Commandes",l:"Ajouter un titre",k:"",f:function(){ $("addbtn").click(); }},
+    {g:"Commandes",l:"Reglages et outils",k:"",f:ouvrirReglages},
+    {g:"Commandes",l:"Raccourcis et gestes",k:"?",f:ouvrirAide}
+  ];
+}
+function ligneValeur(o,g){ return {g:g,y:o.y,l:o.n,f:function(){ allerA(o.y); }}; }
+function palCalcul(q){
+  q=sansAccent(q.trim());
+  var out=[];
+  var vues=VUES.filter(function(v){ var b=document.querySelector('.fk[data-view="'+v[0]+'"]'); return b&&!b.hidden; })
+    .map(function(v){ return {g:"Vues",l:v[2],k:v[1],f:function(){ allerVue(v[0]); }}; });
+  if(!q){
+    (cfg.recents||[]).forEach(function(y){ if(SYMS[y]) out.push(ligneValeur(SYMS[y],"Recents")); });
+    return out.concat(palCommandes(), vues);
+  }
+  var vals=[], vus={};
+  Object.keys(SYMS).forEach(function(y){
+    var o=SYMS[y]; if(vus[y]) return; vus[y]=1;
+    var n=sansAccent(o.n), t=y.toLowerCase(), s=-1;
+    if(t===q) s=0; else if(n===q) s=1; else if(t.indexOf(q)===0) s=2; else if(n.indexOf(q)===0) s=3;
+    else if(n.indexOf(" "+q)>=0) s=4; else if(n.indexOf(q)>=0||t.indexOf(q)>=0) s=5;
+    if(s>=0) vals.push({s:s,o:o});
+  });
+  vals.sort(function(a,b){ return a.s-b.s || a.o.n.localeCompare(b.o.n,"fr"); });
+  vals.slice(0,40).forEach(function(v){ out.push(ligneValeur(v.o,"Valeurs")); });
+  TABS.forEach(function(t){ if(sansAccent(t).indexOf(q)>=0)
+    out.push({g:"Listes",l:t,k:String((UNIVERSE[t]||[]).length),f:function(){
+      cfg.tab=t; save(); buildTabs(); renderAll(); warmHist(); refresh(); }}); });
+  vues.concat(palCommandes()).forEach(function(c){ if(sansAccent(c.l).indexOf(q)>=0||sansAccent(c.k)===q) out.push(c); });
+  return out;
+}
+function palRendre(){
+  var q=$("pal-in").value, res=$("pal-res");
+  PAL.items=palCalcul(q); if(PAL.i>=PAL.items.length) PAL.i=Math.max(0,PAL.items.length-1);
+  if(!PAL.items.length){ res.innerHTML='<div class="pal-vide">Aucun resultat. Pour une valeur absente des listes, passez par + TITRE.</div>'; return; }
+  var g0="", h="";
+  PAL.items.forEach(function(it,i){
+    if(it.g!==g0){ g0=it.g; h+='<div class="pal-grp">'+esc(g0)+"</div>"; }
+    var droite="", milieu="";
+    if(it.y){ var qq=Q[it.y]||{}, o=SYMS[it.y]||{};
+      milieu='<span class="px">'+(o.nf?"N/D":fmt(qq.p))+"</span>";
+      droite='<span class="vr '+cls(qq.pct)+'">'+(o.nf?"":pct(qq.pct))+"</span>"; }
+    else { milieu="<span></span>"; droite='<span class="vr flat">'+esc(it.k||"")+"</span>"; }
+    h+='<button type="button" class="pal-it" role="option" data-i="'+i+'" aria-selected="'+(i===PAL.i?"true":"false")+'">'+
+      '<span class="nm">'+esc(it.l)+(it.y?"<i>"+esc(it.y)+"</i>":"")+"</span>"+milieu+droite+"</button>";
+  });
+  res.innerHTML=h;
+  var a=res.querySelector('[aria-selected="true"]'); if(a&&a.scrollIntoView) a.scrollIntoView({block:"nearest"});
+}
+function palExec(i){
+  var it=PAL.items[i]; if(!it) return;
+  fermerFeuille(); it.f();
+}
+function ouvrirPalette(){
+  if(!$("fullwrap").hidden) fermerPleinEcran();
+  fermerFiche();
+  var ov=ouvrirFeuille("Recherche",'',null);
+  var fe=ov.querySelector(".fe"); fe.querySelector(".fe-tete").remove();
+  fe.querySelector(".fe-corps").outerHTML=
+    '<input class="pal-in" id="pal-in" type="search" autocomplete="off" spellcheck="false" placeholder="Valeur, ticker, liste, vue ou commande" aria-label="Recherche globale">'+
+    '<div class="pal-res" id="pal-res" role="listbox"></div>'+
+    '<div class="pal-pied"><span><kbd>\u2191 \u2193</kbd> parcourir</span><span><kbd>Entree</kbd> ouvrir</span><span><kbd>Echap</kbd> fermer</span></div>';
+  PAL.i=0; palRendre();
+  var inp=$("pal-in"); setTimeout(function(){ inp.focus(); },20);
+  inp.addEventListener("input",function(){ PAL.i=0; palRendre(); });
+  inp.addEventListener("keydown",function(e){
+    if(e.key==="ArrowDown"){ e.preventDefault(); PAL.i=Math.min(PAL.items.length-1,PAL.i+1); palRendre(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); PAL.i=Math.max(0,PAL.i-1); palRendre(); }
+    else if(e.key==="Enter"){ e.preventDefault(); palExec(PAL.i); }
+    else if(e.key==="Escape"){ e.preventDefault(); fermerFeuille(); }
+  });
+  $("pal-res").addEventListener("click",function(e){ var b=e.target.closest("[data-i]"); if(b) palExec(+b.getAttribute("data-i")); });
+}
+$("palbtn").addEventListener("click",ouvrirPalette);
+$("palkbd").textContent=EST_MAC?"\u2318K":"Ctrl K";
+
+/* ---------- mode edition et reordonnancement au doigt ---------- */
+function basculerEdition(){
+  var on=document.body.classList.toggle("edit");
+  $("editbtn").setAttribute("aria-pressed", on?"true":"false");
+  if(on) toast("Mode edition : glissez une ligne par sa poignee pour la deplacer, la croix retire une valeur ou une liste.");
+}
+$("editbtn").addEventListener("click",basculerEdition);
+function deplacerLigne(src,cible,apres){
+  if(!src||!cible||src===cible) return;
+  var liste=ordreCourant().filter(function(y){ return y!==src; });
+  var i=liste.indexOf(cible); if(i<0) i=liste.length-1;
+  liste.splice(apres?i+1:i,0,src);
+  cfg.order[cfg.tab]=liste; cfg.sort="manuel"; save();
+  buildHead(); renderTable();
+  toast("Ordre enregistre pour la liste "+cfg.tab+".");
+}
+(function(){
+  var sc=$("scroll"), src=null, tr0=null, cible=null, apres=false;
+  function nettoyer(){ sc.querySelectorAll("tr.over,tr.over-bas,tr.fantome").forEach(function(x){ x.classList.remove("over","over-bas","fantome"); }); }
+  sc.addEventListener("pointerdown",function(e){
+    if(e.pointerType==="mouse"||!document.body.classList.contains("edit")) return;
+    var p=e.target.closest(".poign"); if(!p) return;
+    tr0=p.closest("tr[data-y]"); if(!tr0) return;
+    src=tr0.getAttribute("data-y"); tr0.classList.add("fantome");
+    try{ p.setPointerCapture(e.pointerId); }catch(err){}
+    e.preventDefault();
+  });
+  sc.addEventListener("pointermove",function(e){
+    if(!src) return;
+    var el=document.elementFromPoint(e.clientX,e.clientY), tr=el&&el.closest&&el.closest("#tbody tr[data-y]");
+    sc.querySelectorAll("tr.over,tr.over-bas").forEach(function(x){ x.classList.remove("over","over-bas"); });
+    var r=sc.getBoundingClientRect();
+    if(e.clientY<r.top+40) sc.scrollTop-=12; else if(e.clientY>r.bottom-40) sc.scrollTop+=12;
+    if(!tr||tr===tr0){ cible=null; return; }
+    var b=tr.getBoundingClientRect(); apres=(e.clientY-b.top)>b.height/2;
+    cible=tr.getAttribute("data-y"); tr.classList.add(apres?"over-bas":"over");
+  });
+  function fin(){ if(!src) return; var s=src, c=cible, a=apres; src=null; cible=null; tr0=null; nettoyer(); if(c) deplacerLigne(s,c,a); }
+  sc.addEventListener("pointerup",fin); sc.addEventListener("pointercancel",fin);
+})();
+
+/* ---------- graphique tactile : pincer pour zoomer, double appui pour annuler ---------- */
+function brancherPincement(cv,getCtx){
+  if(!cv||cv.__pince) return; cv.__pince=1;
+  cv.style.touchAction = cv.id==="cvfull" ? "none" : "pan-y";
+  var pin=null, tap={t:0,x:0}, masque=null, raf=0, bouge=false, x0=0, y0=0;
+  function frac(t,ctx){ var r=cv.getBoundingClientRect(); return Math.max(0,Math.min(1,(t.clientX-r.left-ctx.PL)/ctx.w)); }
+  cv.addEventListener("touchstart",function(ev){
+    var ctx=getCtx(); if(!ctx||!ctx.c) return;
+    clearTimeout(masque);
+    if(ev.touches.length===2){
+      var off=(cfg.zoom&&cfg.zoom.a!=null)?cfg.zoom.a:0, n=ctx.c.length-1;
+      pin={g1:off+frac(ev.touches[0],ctx)*n, g2:off+frac(ev.touches[1],ctx)*n};
+      if(ctx.readEl) ctx.readEl.hidden=true;
+      if(ev.cancelable) ev.preventDefault();
+    } else if(ev.touches.length===1){ pin=null; bouge=false; x0=ev.touches[0].clientX; y0=ev.touches[0].clientY; }
+  },{passive:false});
+  cv.addEventListener("touchmove",function(ev){
+    if(ev.touches.length===1&&(Math.abs(ev.touches[0].clientX-x0)>8||Math.abs(ev.touches[0].clientY-y0)>8)) bouge=true;
+    if(!pin||ev.touches.length!==2) return;
+    var ctx=getCtx(); if(!ctx||!ctx.c) return;
+    if(ev.cancelable) ev.preventDefault();
+    var f1=frac(ev.touches[0],ctx), f2=frac(ev.touches[1],ctx);
+    if(Math.abs(f2-f1)<0.04) return;
+    var total=(CH.c||[]).length; if(total<8) return;
+    var span=Math.round(Math.max(5,Math.min(total-1,(pin.g2-pin.g1)/(f2-f1))));
+    var a=Math.max(0,Math.min(total-1-span,Math.round(pin.g1-f1*span)));
+    var b=a+span+1;
+    cfg.zoom=(a<=0&&b>=total)?null:{a:a,b:b};
+    if(!raf) raf=requestAnimationFrame(function(){ raf=0; redraw(); });
+  },{passive:false});
+  cv.addEventListener("touchend",function(ev){
+    if(pin){ if(ev.touches.length<2){ pin=null; save(); redraw(); } return; }
+    if(ev.touches.length) return;
+    var t=ev.changedTouches[0], now=Date.now();
+    var cache=function(){ var ctx=getCtx(); if(ctx&&ctx.readEl) ctx.readEl.hidden=true; redraw(); };
+    if(!bouge){
+      if(now-tap.t<340&&Math.abs(t.clientX-tap.x)<30){
+        tap.t=0; if(ev.cancelable) ev.preventDefault();
+        if(cfg.zoom){ cfg.zoom=null; save(); toast("Zoom annule."); } cache(); return; }
+      tap={t:now,x:t.clientX};
+    }
+    masque=setTimeout(cache,2600);
+  },{passive:false});
+  cv.addEventListener("touchcancel",function(){ pin=null; });
+}
+brancherPincement($("cv"),function(){ return CTX; });
+brancherPincement($("cvfull"),function(){ return CTXF; });
+
+/* ---------- clavier ---------- */
+document.addEventListener("keydown",function(e){
+  var mod=e.metaKey||e.ctrlKey;
+  if(mod&&(e.key==="k"||e.key==="K")){ e.preventDefault(); if($("pal-in")) fermerFeuille(); else ouvrirPalette(); return; }
+  if(e.key==="Escape"){
+    if(FEUILLE){ e.preventDefault(); fermerFeuille(); return; }
+    if(document.body.classList.contains("fiche")&&$("fullwrap").hidden){ fermerFiche(); return; }
+    if(document.body.classList.contains("edit")&&$("fullwrap").hidden){ basculerEdition(); return; }
+    return;
+  }
+  if(FEUILLE||!$("fullwrap").hidden||mod||e.altKey||saisieEnCours(e.target)) return;
+  var k=e.key;
+  if(k==="ArrowDown"||k==="ArrowUp"){
+    if(e.shiftKey) return;
+    if(!{mon:1,heat:1,perf:1,charts:1}[cfg.view]) return;
+    e.preventDefault(); pas(k==="ArrowDown"?1:-1); return;
+  }
+  if(e.shiftKey&&(k==="ArrowLeft"||k==="ArrowRight")){ e.preventDefault(); changerListe(k==="ArrowRight"?1:-1); return; }
+  if(k==="Enter"&&sel&&{mon:1,heat:1,perf:1,charts:1}[cfg.view]&&!(e.target.closest&&e.target.closest("button,a"))){
+    e.preventDefault(); ouvrirPleinEcran(); return; }
+  if(k==="?"){ e.preventDefault(); ouvrirAide(); return; }
+  var l=k.length===1?k.toLowerCase():"";
+  if(l==="r"){ e.preventDefault(); actualiser(); }
+  else if(l==="i"){ e.preventDefault(); basculerFiche(); }
+  else if(l==="e"){ e.preventDefault(); basculerEdition(); }
+  else if(l==="a"&&sel&&!nofeed(sel)){
+    e.preventDefault();
+    if(enTiroir()) ouvrirFiche(); else if(cfg.pcol){ cfg.pcol=false; save(); appliquerFiche(); }
+    setTimeout(function(){ var n=$("al-niv"); if(n){ n.scrollIntoView({block:"center"}); n.focus(); } },enTiroir()?260:30);
+  }
+});
+
+/* ---------- vues F1 a F10 : defilement a la molette et fondu si debordement ---------- */
+(function(){
+  var fk=document.querySelector(".fkeys"); if(!fk) return;
+  function maj(){ fk.classList.toggle("deborde", fk.scrollLeft+fk.clientWidth<fk.scrollWidth-2); }
+  fk.addEventListener("scroll",maj,{passive:true});
+  fk.addEventListener("wheel",function(e){
+    if(fk.scrollWidth<=fk.clientWidth||Math.abs(e.deltaX)>Math.abs(e.deltaY)) return;
+    fk.scrollLeft+=e.deltaY; e.preventDefault(); },{passive:false});
+  window.addEventListener("resize",maj); setTimeout(maj,50);
+  /* la vue active reste visible */
+  document.addEventListener("click",function(e){ var b=e.target.closest&&e.target.closest(".fkeys .fk");
+    if(b&&b.scrollIntoView) b.scrollIntoView({block:"nearest",inline:"nearest"}); });
+})();
+
+/* ---------- mise en route ---------- */
+appliquerDensite(); appliquerFiche(); majPastilleAlertes(); renderAlertes(); eveil();
+if(cfg.view==="mon") renderTable();
+redraw();
 })();
 </script>
 </body>
