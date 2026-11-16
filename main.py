@@ -108,7 +108,7 @@ async def verrou(request: Request, call_next):
         u = _moi(request)
         if not u:
             if chemin == "/":
-                return HTMLResponse(ACCUEIL)
+                return HTMLResponse(INTRO)
             if chemin == "/terminal":
                 return RedirectResponse("/", status_code=303)
             return JSONResponse({"detail": "Authentification requise"}, status_code=401)
