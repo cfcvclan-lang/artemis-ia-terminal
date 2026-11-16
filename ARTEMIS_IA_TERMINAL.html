@@ -381,6 +381,23 @@ table.sc.tx td:first-child{max-width:none}
 tr.nf td{color:var(--fg-dim)}
 tr.nf td:first-child{color:var(--fg-dim)}
 tr.nf .pill{color:var(--fg-dim)}
+.frj{display:inline-block;margin-left:6px;font-size:9px;letter-spacing:.06em;color:var(--amber);
+  border:1px solid var(--amber-dim);border-radius:2px;padding:0 4px;vertical-align:1px}
+.cdsm-t{width:100%;border-collapse:collapse;font-size:11.5px}
+.cdsm-t th{background:var(--head);color:var(--head-fg);font-family:var(--f-cond);font-size:11.5px;letter-spacing:.08em;
+  text-align:right;padding:4px 7px;font-weight:500;white-space:nowrap}
+.cdsm-t th:first-child,.cdsm-t td:first-child{text-align:left}
+.cdsm-t td{padding:4px 7px;text-align:right;border-bottom:1px solid #101416;white-space:nowrap}
+.cdsm-t td:first-child{color:var(--amber-soft)}
+.cdsm-t tr[data-y]{cursor:pointer}
+.cdsm-t tr[data-y]:hover td{background:#15110a}
+.cdsm-t tr[aria-selected="true"] td{background:#1d1708}
+.cdsm-t td.br{width:38%;padding-right:12px}
+.cdsm-t .tr{position:relative;height:11px;background:#0c1013;border:1px solid var(--grid);border-radius:2px;overflow:hidden}
+.cdsm-t .tr i{position:absolute;left:0;top:0;bottom:0}
+.cdsm-g{display:grid;gap:12px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:1150px){.cdsm-g{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.cdsm-note{font-size:10.5px;color:var(--fg-dim);line-height:1.55;margin-top:8px}
 .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--flat)}
 td.px{color:var(--fg);font-weight:600}
 @keyframes flashUp{0%{background:rgba(0,212,106,.35)}100%{background:transparent}}
@@ -1133,9 +1150,9 @@ U("ArcelorMittal","MT.AS","EUR","EQ"),U("ASML ADR","ASML","USD","EQ"),U("Oracle"
 U("Goldman Sachs","GS","USD","EQ"),U("Exxon Mobil","XOM","USD","EQ"),U("General Motors","GM","USD","EQ"),
 U("GE Aerospace","GE","USD","EQ"),U("Ford Motor","F","USD","EQ"),U("NVIDIA","NVDA","USD","EQ"),
 U("Alphabet A","GOOGL","USD","EQ"),U("Boyd Gaming","BYD","USD","EQ"),U("JPMorgan","JPM","USD","EQ"),
-U("ConocoPhillips","COP","USD","EQ"),U("Chevron","CVX","USD","EQ"),U("Allemagne 2A","ND:ALLEMAGNE_2A","%","RT",1),
-U("Allemagne 10A","ND:ALLEMAGNE_10A","%","RT",1),U("Etats-Unis 10A","^TNX","%","RT"),U("Etats-Unis 2A","ND:ETATS-UNIS_2A","%","RT",1),
-U("France 10A","ND:FRANCE_10A","%","RT",1),U("France 2A","ND:FRANCE_2A","%","RT",1),U("France 1A","ND:FRANCE_1A","%","RT",1),
+U("ConocoPhillips","COP","USD","EQ"),U("Chevron","CVX","USD","EQ"),U("Allemagne 2A","ND:ALLEMAGNE_2A","%","RT"),
+U("Allemagne 10A","ND:ALLEMAGNE_10A","%","RT"),U("Etats-Unis 10A","^TNX","%","RT"),U("Etats-Unis 2A","ND:ETATS-UNIS_2A","%","RT"),
+U("France 10A","ND:FRANCE_10A","%","RT"),U("France 2A","ND:FRANCE_2A","%","RT"),U("France 1A","ND:FRANCE_1A","%","RT"),
 U("EUR IRS 2 ans","ND:EUR_IRS_2_ANS","%","RT",1),U("EUR IRS 1 an","ND:EUR_IRS_1_AN","%","RT",1),U("EUR IRS 10 ans","ND:EUR_IRS_10_ANS","%","RT",1),
 U("EUR/CHF","EURCHF=X","CHF","FX"),U("EUR/USD","EURUSD=X","USD","FX"),U("USD/JPY","USDJPY=X","JPY","FX"),
 U("GBP/USD","GBPUSD=X","USD","FX"),U("DAX","^GDAXI","EUR","IX"),U("Nikkei 225","^N225","JPY","IX"),
@@ -1212,9 +1229,11 @@ function rebuildUniverse(){
   });
   TABS=Object.keys(UNIVERSE).filter(function(t){ return cfg.hidden.indexOf(t)<0; });
   SYMS=Object.keys(UNIVERSE).reduce(function(a,k){ UNIVERSE[k].forEach(function(o){a[o.y]=o;}); return a; },{});
+  Object.keys(SYMX).forEach(function(y){ if(!SYMS[y]) SYMS[y]=SYMX[y]; });
   if(TABS.indexOf(cfg.tab)<0) cfg.tab=TABS[0];
 }
 var TABS=[];
+var SYMX={};   /* series ouvertes hors des listes : taux et CDS Boursorama */
 
 var SYMS={};
 rebuildUniverse();
@@ -1374,13 +1393,17 @@ function refresh(){
     if(cfg.src!=="demo") showBanner(bannerText(err));
   }).then(function(){ renderAll(); });
 }
+function dateCourteFr(ts){
+  try{ return new Date(ts).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",timeZone:"Europe/Paris"}); }catch(e){ return "--"; }
+}
 function applyQuotes(out){
   Object.keys(out).forEach(function(y){
     var n=out[y]; if(!n||n.p==null) return;
     var prev=Q[y]?Q[y].p:null;
     var pc = n.pc!=null?n.pc:(Q[y]?Q[y].pc:null);
     Q[y]={p:n.p,pc:pc,vol:n.vol,hi:n.hi,lo:n.lo,op:n.op,t:n.t||Date.now(),cur:n.cur||(SYMS[y]&&SYMS[y].c),
-          chg:(pc!=null?n.p-pc:null), pct:(pc?((n.p/pc-1)*100):null), prev:prev};
+          chg:(pc!=null?n.p-pc:null), pct:(pc?((n.p/pc-1)*100):null), prev:prev,
+          src:n.src||null, fr:n.fr||null};
     var h=HIST[y]; if(h&&h.c.length){ h.c[h.c.length-1]=n.p; }
   });
 }
@@ -1606,7 +1629,8 @@ function renderTable(){
       '<td class="spk-td flat">\u2013</td><td class="flat">\u2013</td>'+
       '<td class="c-opt flat">\u2013</td><td class="c-opt flat">\u2013</td></tr>';
     return '<tr draggable="true" data-y="'+esc(y)+'" aria-selected="'+(sel===y?"true":"false")+'">'+
-      '<td><span class="poign" title="Glisser pour reordonner">&#x2807;&#x2807;</span>'+esc(r.o.n)+'<span class="tkr">'+esc(y)+"</span>"+
+      '<td><span class="poign" title="Glisser pour reordonner">&#x2807;&#x2807;</span>'+esc(r.o.n)+(q.fr?'<span class="frj" title="Cloture de la veille, source '+esc(q.src||"")+'">'+esc(q.fr)+"</span>":
+          '<span class="tkr">'+esc(y)+"</span>")+
         '<button class="rmv" type="button" data-rm="'+esc(y)+'" title="Retirer de cette liste">&times;</button></td>'+
       '<td class="px tnum'+flash+'">'+fmt(q.p)+"</td>"+
       '<td class="c-opt tnum '+cls(q.chg)+'">'+dchg(q)+"</td>"+
@@ -1614,7 +1638,7 @@ function renderTable(){
       '<td class="spk-td">'+spark(series(y,cfg.hmw),72,20,1.2,r[cfg.hmw])+"</td>"+
       '<td class="tnum flat">'+(r.vol1a==null?"--":r.vol1a.toFixed(1)+"%")+"</td>"+
       '<td class="c-opt tnum flat">'+vol(q.vol)+"</td>"+
-      '<td class="c-opt tnum flat">'+(q.t?hhmmss(new Date(q.t),"Europe/Paris"):"--")+"</td></tr>";
+      '<td class="c-opt tnum flat">'+(q.t?(q.fr?dateCourteFr(q.t):hhmmss(new Date(q.t),"Europe/Paris")):"--")+"</td></tr>";
   }).join("");
   tb.innerHTML=html;
 }
@@ -1735,17 +1759,33 @@ var CATALOGUE=[
    {lib:"Allemagne 10 ans", src:"ecb", code:"IRS/M.DE.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:DE10Y", fam:"souverain", role:"de10"},
    {lib:"Italie 10 ans",    src:"ecb", code:"IRS/M.IT.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:IT10Y", fam:"souverain"},
    {lib:"Espagne 10 ans",   src:"ecb", code:"IRS/M.ES.L.L40.CI.0000.EUR.N.Z", ans:10, tv:"TVC:ES10Y", fam:"souverain"}]},
+ {g:"Souverains, Boursorama, cloture J-1", l:[
+   {lib:"France 1 an (TEC)",    src:"brs", code:"FRA:TEC:1",  ans:1,  fam:"boursorama"},
+   {lib:"France 2 ans (TEC)",   src:"brs", code:"FRA:TEC:2",  ans:2,  tv:"TVC:FR02Y", fam:"boursorama"},
+   {lib:"France 5 ans (TEC)",   src:"brs", code:"FRA:TEC:5",  ans:5,  tv:"TVC:FR05Y", fam:"boursorama"},
+   {lib:"France 10 ans (TEC)",  src:"brs", code:"FRA:TEC:10", ans:10, tv:"TVC:FR10Y", fam:"boursorama", role:"fr10j"},
+   {lib:"France 30 ans (TEC)",  src:"brs", code:"FRA:TEC:30", ans:30, fam:"boursorama"},
+   {lib:"Allemagne 2 ans",      src:"brs", code:"DEU:BM:2",   ans:2,  tv:"TVC:DE02Y", fam:"boursorama"},
+   {lib:"Allemagne 10 ans",     src:"brs", code:"DEU:BM:10",  ans:10, tv:"TVC:DE10Y", fam:"boursorama", role:"de10j"},
+   {lib:"Italie 2 ans",         src:"brs", code:"ITA:BM:2",   ans:2,  fam:"boursorama"},
+   {lib:"Italie 10 ans",        src:"brs", code:"ITA:BM:10",  ans:10, tv:"TVC:IT10Y", fam:"boursorama"},
+   {lib:"Espagne 10 ans",       src:"brs", code:"ESP:BM:10",  ans:10, tv:"TVC:ES10Y", fam:"boursorama"},
+   {lib:"Belgique 10 ans",      src:"brs", code:"BEL:BM:10",  ans:10, fam:"boursorama"},
+   {lib:"Pays-Bas 10 ans",      src:"brs", code:"NLD:BM:10",  ans:10, fam:"boursorama"},
+   {lib:"Portugal 10 ans",      src:"brs", code:"PRT:BM:10",  ans:10, fam:"boursorama"},
+   {lib:"Grece 10 ans",         src:"brs", code:"GRC:BM:10",  ans:10, fam:"boursorama"},
+   {lib:"Royaume-Uni 10 ans",   src:"brs", code:"10A:ROYAUME-UNI", ans:10, tv:"TVC:GB10Y", fam:"boursorama"},
+   {lib:"Japon 10 ans",         src:"brs", code:"10A:JAPON",  ans:10, tv:"TVC:JP10Y", fam:"boursorama"},
+   {lib:"Etats-Unis 2 ans",     src:"abc", code:"USA:2",      ans:2,  tv:"TVC:US02Y", fam:"boursorama"}]},
  {g:"Graphique seul, aucune valeur publiee en libre", l:[
-   {lib:"France 2 ans",      src:"tv", code:"TVC:FR02Y", ans:2,  tv:"TVC:FR02Y", fam:"graphique"},
-   {lib:"France 5 ans",      src:"tv", code:"TVC:FR05Y", ans:5,  tv:"TVC:FR05Y", fam:"graphique"},
    {lib:"Zone euro 10 ans",  src:"tv", code:"TVC:EU10Y", ans:10, tv:"TVC:EU10Y", fam:"graphique"},
-   {lib:"Royaume-Uni 10 ans",src:"tv", code:"TVC:GB10Y", ans:10, tv:"TVC:GB10Y", fam:"graphique"},
    {lib:"Royaume-Uni 2 ans", src:"tv", code:"TVC:GB02Y", ans:2,  tv:"TVC:GB02Y", fam:"graphique"},
-   {lib:"Japon 10 ans",      src:"tv", code:"TVC:JP10Y", ans:10, tv:"TVC:JP10Y", fam:"graphique"}]}
+   {lib:"Zone euro 2 ans",   src:"tv", code:"TVC:EU02Y", ans:2,  tv:"TVC:EU02Y", fam:"graphique"}]}
 ];
 var FAMILLES={etatsunis:"Etats-Unis, cotes en continu", allemagne:"Courbe allemande, releve quotidien",
   court:"Taux courts zone euro", courbe:"Courbe zone euro, releve quotidien",
   souverain:"Souverains 10 ans, moyennes mensuelles", graphique:"Graphique seul",
+  boursorama:"Souverains, Boursorama, cloture J-1",
   perso:"Mes ajouts"};
 
 function cleTaux(e){ return e.src+"~"+e.code; }
@@ -1756,6 +1796,13 @@ function tauxDefaut(){
 }
 function listeTaux(){
   if(!cfg.taux || !cfg.taux.length) cfg.taux=tauxDefaut().map(function(e){ return JSON.parse(JSON.stringify(e)); });
+  if(!cfg.tauxBrs){
+    /* une seule fois : les lignes Boursorama rejoignent une liste deja composee */
+    var deja={}; cfg.taux.forEach(function(e){ deja[e.src+"~"+e.code]=1; });
+    CATALOGUE.forEach(function(g){ g.l.forEach(function(e){
+      if(e.fam==="boursorama"&&!deja[e.src+"~"+e.code]) cfg.taux.push(JSON.parse(JSON.stringify(e))); }); });
+    cfg.tauxBrs=1; try{ save(); }catch(err){}
+  }
   return cfg.taux;
 }
 function specTaux(){
@@ -1785,7 +1832,7 @@ function parRole(){
 }
 function badgeFreq(f){
   var k={continu:["live","CONTINU"],quotidien:["jour","QUOTIDIEN"],
-         mensuel:["mois","MENSUEL"],graphique:["mois","GRAPHIQUE"]}[f||""];
+         mensuel:["mois","MENSUEL"],graphique:["mois","GRAPHIQUE"],veille:["jour","CLOTURE J-1"]}[f||""];
   if(!k) return '<span class="freq mois">--</span>';
   return '<span class="freq '+k[0]+'">'+k[1]+"</span>";
 }
@@ -1847,9 +1894,11 @@ function renderTaux(){
         '<td class="tnum '+cls(r.w)+'">'+bp(r.w)+"</td>"+
         '<td class="tnum '+cls(r.m)+'">'+bp(r.m)+"</td>"+
         '<td class="tnum flat">'+esc(r.date||"")+"</td>";
-      lignes.push('<tr data-i="'+i+'"><td'+
-        (e.tv?' title="Suivi en continu dans le panneau TradingView, symbole '+esc(e.tv)+'"':"")+'>'+
-        esc(e.lib)+" "+badgeFreq(r.freq)+
+      var gy=(e.src==="brs"?"BRS:"+e.code:(e.src==="abc"?"BRS:ABC:"+e.code:""));
+      if(gy) enregistrerSym(gy, e.lib, "%");
+      lignes.push('<tr data-i="'+i+'"'+(gy?' data-gy="'+esc(gy)+'" class="cliq" style="cursor:pointer"':"")+'><td'+
+        (gy?' title="Ouvrir le graphique dans la fiche"':(e.tv?' title="Suivi en continu dans le panneau TradingView, symbole '+esc(e.tv)+'"':""))+'>'+
+        esc(e.lib)+" "+badgeFreq(r.freq)+(gy?' <span class="flat" style="font-size:10px">\u2197</span>':"")+
         (e.tv?' <span class="flat" style="font-size:9.5px">\u25cf</span>':"")+
         '</td>'+droite+'<td><button class="txdel" type="button" data-del="'+i+'" title="Retirer">&times;</button></td></tr>');
     });
@@ -1902,6 +1951,15 @@ function brancherTaux(){
   el.querySelectorAll("[data-del]").forEach(function(b){
     b.addEventListener("click",function(ev){ ev.stopPropagation(); retirerTaux(+b.getAttribute("data-del")); });
   });
+  el.querySelectorAll("tr[data-gy]").forEach(function(tr){
+    tr.addEventListener("click",function(){ select(tr.getAttribute("data-gy"),true); });
+  });
+}
+/* une serie hors des listes (taux ou CDS Boursorama) devient selectionnable :
+   la fiche, son graphique et le plein ecran fonctionnent comme pour une valeur */
+function enregistrerSym(y, nom, unite){
+  if(!SYMX[y]) SYMX[y]={n:nom, y:y, c:unite||"%", t:"RT", nf:0};
+  if(!SYMS[y]) SYMS[y]=SYMX[y];
 }
 function ouvrirCatalogue(){
   var el=$("ratesview"); if(!el) return;
@@ -2536,7 +2594,8 @@ function renderCredit(){
     '<label class="flat" style="font-size:10.5px">PERIMETRE '+
       '<select id="cr-port"><option value="liste">LA LISTE COURANTE</option>'+
       '<option value="univers">TOUT L\'UNIVERS</option>'+
-      '<option value="itraxx">ITRAXX EUROPE ET FIN SUB</option></select></label>'+
+      '<option value="itraxx">ITRAXX EUROPE ET FIN SUB</option>'+
+      '<option value="marche">CDS SOUVERAINS ET GRANDES SIGNATURES</option></select></label>'+
     '<span class="spacer" style="flex:1 1 auto"></span>'+
     '<button class="fk" type="button" id="cr-reload">ACTUALISER</button></div>';
   if(CRED&&CRED.err){
@@ -2745,7 +2804,8 @@ function renderDetail(){
       if(lo52==null||c<lo52) lo52=c; if(hi52==null||c>hi52) hi52=c; } } }
   kv.innerHTML=[["Ouverture",fmt(q.op)],["Plus haut",fmt(q.hi)],["Plus bas",fmt(q.lo)],
     ["Cloture veille",fmt(q.pc)],["Volume",vol(q.vol)],["Haut 52 sem.",fmt(hi52)],["Bas 52 sem.",fmt(lo52)],
-    ["Mise a jour",q.t?hhmmss(new Date(q.t),"Europe/Paris"):"--"]]
+    ["Mise a jour",q.t?(q.fr?"cloture du "+dateCourteFr(q.t):hhmmss(new Date(q.t),"Europe/Paris")):"--"]].concat(
+     q.src?[["Source",esc(q.src)+(q.fr?" ("+esc(q.fr)+")":"")]]:[])
     .map(function(p){return "<dt>"+p[0]+"</dt><dd>"+p[1]+"</dd>";}).join("");
 
   renderRisk(); renderCds(); renderCorr(); renderDiv(); drawChart();
@@ -2905,7 +2965,7 @@ function loadChart(){
   if(!sel) return;
   var y=sel,r=cfg.range;
   var get = (mode==="backend"&&cfg.base)? histBackend(y,r) : (mode==="demo"? Promise.reject(0) : histYahoo(y,r));
-  get.then(function(h){ if(!h||!h.c||!h.c.length) throw new Error("vide"); return h; })
+  get.then(function(h){ if(!h||!h.c||(!h.c.length&&!h.note)) throw new Error("vide"); return h; })
      .catch(function(){
         var full=(HIST[y]&&(!HIST[y].demo||mode==="demo"))?HIST[y]:(mode==="demo"?demoHist(y):null);
         if(!full) return {t:[],c:[]};
@@ -2917,7 +2977,7 @@ function loadChart(){
         return {t:T,c:C};
      })
      .then(function(h){ if(sel!==y) return;
-        CH={t:h.t,c:h.c,v:h.v||[],sym:y}; cfg.zoom=null; redraw(); });
+        CH={t:h.t,c:h.c,v:h.v||[],sym:y,note:h.note||null,src:h.src||null}; cfg.zoom=null; redraw(); });
 }
 function sma(C,n){
   var out=new Array(C.length), sum=0;
@@ -3038,7 +3098,12 @@ function paintChart(cv,readEl,grand){
   var S3=chartSlice(), c=S3.c, t=S3.t, v=S3.v;
   if(!c||c.length<2||CH.sym!==sel){
     g.fillStyle="#6b6458"; g.font="12px 'IBM Plex Mono',monospace";
-    g.fillText("Chargement de l'historique...",12,H/2);
+    var msg=(CH.sym===sel&&CH.note)?CH.note:"Chargement de l'historique...";
+    if(msg.length*7>W-24){
+      var mots=msg.split(" "), l1="", y0=H/2-8;
+      mots.forEach(function(m){ if((l1+" "+m).length*7>W-24){ g.fillText(l1,12,y0); y0+=17; l1=m; } else l1=l1?l1+" "+m:m; });
+      g.fillText(l1,12,y0);
+    } else g.fillText(msg,12,H/2);
     cv.__snap=null; return null;
   }
   var mmSet = cfg.mm || [];
@@ -4463,7 +4528,8 @@ function renderItraxx(){
     '<label class="flat" style="font-size:10.5px">PERIMETRE '+
       '<select id="cr-port"><option value="liste">LA LISTE COURANTE</option>'+
       '<option value="univers">TOUT L\'UNIVERS</option>'+
-      '<option value="itraxx">ITRAXX EUROPE ET FIN SUB</option></select></label>'+
+      '<option value="itraxx">ITRAXX EUROPE ET FIN SUB</option>'+
+      '<option value="marche">CDS SOUVERAINS ET GRANDES SIGNATURES</option></select></label>'+
     '<span class="spacer" style="flex:1 1 auto"></span>'+
     '<button class="fk" type="button" id="cr-reload">ACTUALISER</button></div>';
   if(!ITX||!ITX.d||!ITX.d.ok){
@@ -5234,6 +5300,85 @@ document.addEventListener("keydown",function(e){
 appliquerDensite(); appliquerFiche(); majPastilleAlertes(); renderAlertes(); eveil();
 if(cfg.view==="mon") renderTable();
 redraw();
+
+/* ---------- F9 : CDS souverains et grandes signatures, Boursorama, cloture J-1 ---------- */
+(function(){
+var CDSM=null, cdsmCharge=false;
+function cdsmLoad(force){
+  if(cdsmCharge) return;
+  if(!force&&CDSM&&Date.now()-CDSM.at<1800000){ cdsmRender(); return; }
+  cdsmCharge=true;
+  var el=$("creditview"); if(el&&!CDSM) el.innerHTML='<div class="empty">Chargement des CDS...</div>';
+  var base=(cfg.base||"").replace(/\/$/,"");
+  jget(base+"/api/cds/marche",60000)
+    .then(function(j){ CDSM={d:j,at:Date.now(),err:j&&j.err||null}; })
+    .catch(function(e){ CDSM={err:(e&&e.message)||"indisponible",at:Date.now()}; })
+    .then(function(){ cdsmCharge=false; if(cfg.view==="credit"&&cfg.credport==="marche") cdsmRender(); });
+}
+function vbp(v){ if(v==null||!isFinite(v)) return '<span class="flat">--</span>';
+  return '<span class="'+(v>0.05?"down":(v<-0.05?"up":"flat"))+'">'+(v>0?"+":"")+v.toFixed(1)+"</span>"; }
+function tableau(titre, L){
+  if(!L||!L.length) return '<div class="crpan"><h4>'+titre+'</h4><div class="empty">Aucune ligne lue.</div></div>';
+  var maxi=Math.max(100, L[L.length-1].spread*1.05);
+  return '<div class="crpan"><h4>'+titre+'</h4><table class="cdsm-t"><thead><tr><th>Signature</th><th>Spread</th>'+
+    '<th></th><th>Seance</th><th>1 sem</th><th>1 mois</th><th>Defaut 5 ans</th></tr></thead><tbody>'+
+    L.map(function(r){
+      var w=Math.max(2, r.spread/maxi*100);
+      if(r.sym) enregistrerSym(r.sym, "CDS "+r.nom+" 5 ans", "pb");
+      return (r.sym?'<tr data-y="'+esc(r.sym)+'" aria-selected="'+(sel===r.sym?"true":"false")+'" title="Ouvrir le graphique">':"<tr>")+
+        "<td>"+esc(r.nom)+' <span class="flat" style="font-size:10px">\u2197</span></td><td class="tnum"><b>'+r.spread.toFixed(1)+"</b></td>"+
+        '<td class="br"><div class="tr"><i style="width:'+w.toFixed(1)+'%;background:'+couleurSpread(r.spread)+'"></i></div></td>'+
+        '<td class="tnum">'+vbp(r.var)+'</td><td class="tnum">'+vbp(r.var_1s)+'</td><td class="tnum">'+vbp(r.var_1m)+"</td>"+
+        '<td class="tnum flat">'+(pdImplicite(r.spread)*100).toFixed(1)+"%</td></tr>";
+    }).join("")+"</tbody></table></div>";
+}
+function cdsmRender(){
+  var el=$("creditview"); if(!el) return;
+  var barre='<div class="calbar">'+
+    '<label class="flat" style="font-size:10.5px">PERIMETRE '+
+      '<select id="cr-port"><option value="liste">LA LISTE COURANTE</option>'+
+      '<option value="univers">TOUT L\'UNIVERS</option>'+
+      '<option value="itraxx">ITRAXX EUROPE ET FIN SUB</option>'+
+      '<option value="marche">CDS SOUVERAINS ET GRANDES SIGNATURES</option></select></label>'+
+    '<span class="spacer" style="flex:1 1 auto"></span>'+
+    '<span class="frj" style="margin-right:8px">CLOTURE J-1</span>'+
+    '<button class="fk" type="button" id="cr-reload">ACTUALISER</button></div>';
+  if(!CDSM||CDSM.err||!CDSM.d){
+    var diag=(cfg.base||"").replace(/\/$/,"")+"/api/diag/sources";
+    el.innerHTML=barre+'<div class="empty">CDS indisponibles'+(CDSM&&CDSM.err?" ("+esc(CDSM.err)+")":"")+'.<br>'+
+      '<span class="flat" style="font-size:11px">Le diagnostic montre quelle source repond : '+
+      '<a href="'+esc(diag)+'" target="_blank" rel="noopener" style="color:var(--amber)">diagnostic des sources</a></span></div>';
+    brancherCredit(); return;
+  }
+  var d=CDSM.d, S=d.souverains||[], E=d.entreprises||[];
+  var fr=S.filter(function(r){ return /^france$/i.test(r.nom); })[0];
+  var de=S.filter(function(r){ return /^allemagne$/i.test(r.nom); })[0];
+  var it=S.filter(function(r){ return /^italie$/i.test(r.nom); })[0];
+  var k=function(lbl,r,sous){ return '<div class="k"><span>'+lbl+"</span><b>"+(r?r.spread.toFixed(1)+" pb":"--")+"</b><i>"+
+    (r?vbp(r.var)+" pb sur la seance":sous)+"</i></div>"; };
+  var dateTxt=d.asof?new Date(d.asof+"T12:00:00").toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"}):"--";
+  var kpi='<div class="crkpi">'+k("CDS France 5 ans",fr,"non publie")+k("CDS Allemagne 5 ans",de,"non publie")+
+    k("CDS Italie 5 ans",it,"non publie")+
+    '<div class="k"><span>Ecart France - Allemagne</span><b>'+(fr&&de?(fr.spread-de.spread).toFixed(1)+" pb":"--")+
+      "</b><i>prime de risque francaise</i></div>"+
+    '<div class="k"><span>Dernier calcul</span><b style="font-size:16px">'+esc(dateTxt)+"</b><i>"+
+      (d.asof_exact?"date lue sur Boursorama":"date estimee, veille ouvree")+"</i></div></div>";
+  el.innerHTML=barre+'<div class="crwrap">'+kpi+'<div class="cdsm-g">'+
+    tableau("CDS souverains 5 ans",S)+tableau("Grandes signatures, CDS 5 ans",E)+"</div>"+
+    '<div class="cdsm-note">Une ligne ouvre sa courbe dans la fiche, PLEIN ECRAN pour l\'agrandir. '+
+    "L'historique se constitue a chaque cloture relevee par le serveur, Boursorama ne publiant pas le sien en libre. "+
+    'Source Boursorama, spreads en points de base, cloture de la veille et non temps reel. '+
+    "Les CDS se traitent de gre a gre, ces niveaux sont indicatifs. Defaut 5 ans : probabilite implicite, recuperation 40 %.</div></div>";
+  brancherCredit();
+}
+var loadPrec=loadCredit, renderPrec=renderCredit;
+loadCredit=function(force){ if(cfg.credport==="marche") return cdsmLoad(force); return loadPrec(force); };
+renderCredit=function(){ if(cfg.credport==="marche") return cdsmRender(); return renderPrec(); };
+if(cfg.view==="credit"&&cfg.credport==="marche") cdsmLoad(true);
+/* une serie ouverte hors des listes n'attend pas le prochain cycle de 15 s pour sa cotation */
+var selPrec=select;
+select=function(y,byUser){ selPrec(y,byUser); if(SYMX[y]&&(!Q[y]||Q[y].p==null)&&mode!=="demo") refresh(); };
+})();
 })();
 </script>
 </body>
