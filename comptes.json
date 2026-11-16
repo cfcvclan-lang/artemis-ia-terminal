@@ -1,0 +1,50 @@
+{
+ "maj": 1794860499,
+ "utilisateurs": [
+  {
+   "email": "othman@artemis-ia.com",
+   "nom": "Administrateur",
+   "prenom": "",
+   "profession": "Administrateur",
+   "telephone": "",
+   "empreinte": "de78d8b66187ec1e1a3ebcc5d35517e61cf05494a2c3812d54799374ab650a05",
+   "sel": "79662592c9d18b463ae92e82148139fb",
+   "role": "admin",
+   "statut": "actif",
+   "motif": "",
+   "cree": 1794860438,
+   "decide": 1794860438,
+   "vu": 1
+  },
+  {
+   "email": "structuration@artemis-ia.com",
+   "nom": "Artemis",
+   "prenom": "Structuration",
+   "profession": "Membre Artemis",
+   "telephone": "0000000000",
+   "empreinte": "4fd58e4fba0afcfb3fb21c842d376e94e5bd77b660a13b6bd3dcfdc0413b4485",
+   "sel": "8c4f3797eab37fb5d45c1cf980470e81",
+   "role": "membre",
+   "statut": "actif",
+   "motif": "",
+   "cree": 1794860490,
+   "decide": 1794860490,
+   "vu": 1
+  },
+  {
+   "email": "theo@artemis-ia.com",
+   "nom": "Artemis",
+   "prenom": "Theo",
+   "profession": "Membre Artemis",
+   "telephone": "0000000000",
+   "empreinte": "4894a59d84b11d73a54de9b2ab03c45e71f180f6ec32dac8eaffcbbd36051db3",
+   "sel": "a4f52069403d74bdb6890e0989915ce3",
+   "role": "membre",
+   "statut": "actif",
+   "motif": "",
+   "cree": 1794860491,
+   "decide": 1794860491,
+   "vu": 1
+  }
+ ]
+}
