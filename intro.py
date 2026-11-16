@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Page d'introduction du terminal, sans connexion : presentation, sessions des marches, entree."""
+"""Page d'accueil du terminal : presentation (design 'Beyond data') + connexion directe."""
 
 INTRO = r"""<!doctype html>
 <html lang="fr">
@@ -9,7 +9,7 @@ INTRO = r"""<!doctype html>
 <title>Artemis IA Terminal</title>
 <meta name="theme-color" content="#000000">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
 <style>
 :root{
   --bg:#000; --panel:#0a0c0d; --panel2:#0f1214; --grid:#1c2124; --grid2:#262c30;
@@ -42,34 +42,54 @@ body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-mono);fon
 .etatmarche.on{color:var(--fg)}
 
 /* ---------- grille principale ---------- */
-.page{flex:1 1 auto;display:grid;grid-template-columns:minmax(340px,5fr) minmax(0,7fr);
+.page{flex:1 1 auto;display:grid;grid-template-columns:minmax(380px,5fr) minmax(0,7fr);
   max-width:1440px;width:100%;margin:0 auto}
-.gauche{padding:56px 48px 48px max(28px,env(safe-area-inset-left,0px));border-right:1px solid var(--grid);
+.gauche{padding:48px 48px 40px max(28px,env(safe-area-inset-left,0px));border-right:1px solid var(--grid);
   display:flex;flex-direction:column}
 .droite{padding:56px max(28px,env(safe-area-inset-right,0px)) 48px 44px;min-width:0}
 
-h1{font-family:var(--f-cond);font-weight:700;font-size:clamp(38px,4.1vw,66px);line-height:.95;
-  letter-spacing:.015em;margin:0 0 24px;color:var(--fg);text-transform:uppercase}
+h1{font-family:var(--f-cond);font-weight:700;font-size:clamp(32px,3.4vw,54px);line-height:.97;
+  letter-spacing:.015em;margin:0 0 18px;color:var(--fg);text-transform:uppercase}
 h1 em{font-style:normal;color:var(--amber)}
-@media (max-width:1100px){ h1{font-size:clamp(38px,8vw,72px)} }
-@media (max-width:480px){ h1{font-size:clamp(30px,10vw,44px)} .signature{border-left:0;padding-left:0} }
-.chapo{color:#bdb6aa;max-width:46ch;margin:0 0 36px;font-size:13.5px}
+@media (max-width:1100px){ h1{font-size:clamp(34px,7vw,60px)} }
+@media (max-width:480px){ h1{font-size:clamp(28px,9vw,40px)} .signature{border-left:0;padding-left:0} }
+.chapo{color:#bdb6aa;max-width:50ch;margin:0 0 26px;font-size:13px}
 
 .aide{font-size:11.5px;color:var(--fg-dim);margin:14px 0 0;line-height:1.6}
-.gauche .bas{margin-top:auto;padding-top:40px;color:var(--fg-mute);font-size:11px;max-width:44ch}
+.gauche .bas{margin-top:auto;padding-top:28px;color:var(--fg-mute);font-size:11px;max-width:48ch}
 
-.entree{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-.cta{display:inline-flex;align-items:center;gap:14px;font-family:var(--f-cond);font-size:20px;font-weight:600;
-  letter-spacing:.08em;background:var(--amber);color:#000;text-decoration:none;padding:15px 30px;border-radius:2px;
-  min-height:54px;border:1px solid var(--amber);transition:background .14s}
-.cta span{font-size:13px;transition:transform .14s}
-.cta:hover{background:var(--amber-soft);border-color:var(--amber-soft)}
-.cta:hover span{transform:translateX(3px)}
-.cta:focus-visible{outline:2px solid #4fc3f7;outline-offset:3px}
-.raccourci{color:var(--fg-dim);font-size:12px}
-.raccourci kbd{font-family:var(--f-mono);font-size:11px;color:var(--amber);border:1px solid var(--amber-dim);border-radius:2px;padding:1px 6px}
-.gauche .aide{max-width:44ch;margin-top:22px}
-@media (pointer:coarse){ .raccourci{display:none} }
+/* ---------- connexion ---------- */
+.connexion{margin-top:6px}
+.connexion h2{font-family:var(--f-cond);font-size:16px;font-weight:600;letter-spacing:.1em;color:var(--amber);
+  margin:0 0 14px;text-transform:uppercase}
+.boite{background:var(--panel);border:1px solid var(--grid2);border-radius:3px;padding:20px;max-width:420px}
+.boite[hidden]{display:none}
+.champs{display:grid;grid-template-columns:1fr;gap:12px}
+.champ{display:flex;flex-direction:column;gap:5px}
+label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--fg-dim)}
+input{background:#05070a;border:1px solid var(--grid2);color:var(--fg);padding:10px 11px;border-radius:2px;
+  font-family:var(--f-mono);font-size:13px;width:100%}
+input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 1px var(--amber-dim)}
+.envoi{margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.envoi button{font-family:var(--f-cond);font-size:15px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+  background:var(--amber);border:1px solid var(--amber);color:#000;padding:11px 24px;border-radius:2px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:10px;transition:background .14s}
+.envoi button span{font-size:12px;transition:transform .14s}
+.envoi button:hover{background:var(--amber-soft);border-color:var(--amber-soft)}
+.envoi button:hover span{transform:translateX(3px)}
+.envoi button:disabled{opacity:.5;cursor:default}
+.envoi button:disabled:hover span{transform:none}
+.msg{font-size:12px;min-height:16px}
+.msg.ko{color:#ffb4ae}
+.msg.ok{color:#7ee2a8}
+.choix{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.petit{font-family:var(--f-cond);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;
+  background:transparent;border:1px solid var(--amber-dim);color:var(--amber);padding:8px 16px;border-radius:2px;
+  cursor:pointer;transition:background .14s,border-color .14s}
+.petit:hover{background:#1a1206;border-color:var(--amber)}
+.petit[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:#000}
+.boite .aide{margin:12px 0 0}
+@media (max-width:480px){ .boite{padding:16px;max-width:none} }
 
 /* ---------- sessions mondiales ---------- */
 .titre{display:flex;align-items:baseline;gap:14px;margin:0 0 16px;flex-wrap:wrap}
@@ -115,7 +135,7 @@ footer{border-top:1px solid var(--grid);color:var(--fg-mute);font-size:10.5px;le
 /* ---------- tablette et mobile ---------- */
 @media (max-width:1100px){
   .page{grid-template-columns:1fr}
-  .gauche{border-right:0;border-bottom:1px solid var(--grid);padding:44px 28px 40px}
+  .gauche{border-right:0;border-bottom:1px solid var(--grid);padding:40px 28px 36px}
   .gauche .bas{display:none}
   .droite{padding:40px 28px 44px}
 }
@@ -152,9 +172,50 @@ footer{border-top:1px solid var(--grid);color:var(--fg-mute);font-size:10.5px;le
     <p class="chapo">Le terminal interne d'Artemis Investment Advisors. Cotations en continu, performances
       de la séance à trois ans, taux, crédit, calendrier et actualité sur l'ensemble des sous-jacents suivis par le desk.</p>
 
-    <div class="entree">
-      <a class="cta" href="/terminal" id="go">Entrer dans le terminal<span aria-hidden="true">&#9654;</span></a>
-      <span class="raccourci">ou appuyez sur <kbd>Entrée</kbd></span>
+    <div class="connexion">
+      <h2>Accéder au terminal</h2>
+      <div class="choix">
+        <button class="petit" type="button" id="b-co" aria-pressed="true">Se connecter</button>
+        <button class="petit" type="button" id="b-de" aria-pressed="false" hidden>Demander un acces</button>
+      </div>
+
+      <form class="boite" id="f-co" autocomplete="on">
+        <div class="champs">
+          <div class="champ"><label for="co-mail">Adresse email</label>
+            <input id="co-mail" name="username" type="email" autocomplete="username" required></div>
+          <div class="champ"><label for="co-mdp">Mot de passe</label>
+            <input id="co-mdp" name="password" type="password" autocomplete="current-password" required></div>
+        </div>
+        <div class="envoi">
+          <button type="submit" id="co-go">Entrer<span aria-hidden="true">&#9654;</span></button>
+          <span class="msg" id="co-msg"></span>
+        </div>
+        <p class="aide">Mot de passe oublié, ou pas encore d'accès : contactez l'administrateur,
+          les accès de ce terminal sont créés à la main.</p>
+      </form>
+
+      <form class="boite" id="f-de" hidden autocomplete="on">
+        <div class="champs">
+          <div class="champ"><label for="de-prenom">Prénom</label>
+            <input id="de-prenom" type="text" autocomplete="given-name" required></div>
+          <div class="champ"><label for="de-nom">Nom</label>
+            <input id="de-nom" type="text" autocomplete="family-name" required></div>
+          <div class="champ"><label for="de-mail">Adresse email, qui servira d'identifiant</label>
+            <input id="de-mail" type="email" autocomplete="email" required></div>
+          <div class="champ"><label for="de-prof">Profession</label>
+            <input id="de-prof" type="text" autocomplete="organization-title" required></div>
+          <div class="champ"><label for="de-tel">Téléphone</label>
+            <input id="de-tel" type="tel" autocomplete="tel" required></div>
+          <div class="champ"><label for="de-mdp">Mot de passe souhaité</label>
+            <input id="de-mdp" type="password" autocomplete="new-password" required>
+            <p class="aide">Dix caractères minimum, mélangeant au moins trois types parmi minuscules,
+              majuscules, chiffres et signes.</p></div>
+        </div>
+        <div class="envoi">
+          <button type="submit" id="de-go">Envoyer la demande</button>
+          <span class="msg" id="de-msg"></span>
+        </div>
+      </form>
     </div>
 
     <p class="bas">Données de marché fournies à titre d'information, avec un différé possible selon les sources.
@@ -198,9 +259,59 @@ footer{border-top:1px solid var(--grid);color:var(--fg-mute);font-size:10.5px;le
   "use strict";
   var $=function(i){return document.getElementById(i);};
 
-  /* ---------- entree au clavier ---------- */
-  document.addEventListener("keydown",function(e){
-    if(e.key==="Enter"&&!e.metaKey&&!e.ctrlKey&&!e.altKey){ e.preventDefault(); location.href="/terminal"; }
+  /* ---------- connexion / demande d'acces ---------- */
+  function onglet(co){
+    $("b-co").setAttribute("aria-pressed",co?"true":"false");
+    $("b-de").setAttribute("aria-pressed",co?"false":"true");
+    $("f-co").hidden=!co; $("f-de").hidden=co;
+  }
+  $("b-co").onclick=function(){onglet(true);};
+  $("b-de").onclick=function(){onglet(false);};
+  /* le bouton de demande n'apparait que si le serveur accepte les demandes */
+  fetch("/auth/demande",{method:"POST",credentials:"same-origin",
+    headers:{"Content-Type":"application/json"},body:"{}"})
+    .then(function(r){
+      if(r.status!==403){
+        $("b-de").hidden=false;
+        if(location.hash==="#demande") onglet(false);
+      }
+    }).catch(function(){});
+
+  function dire(el,txt,ok){ el.textContent=txt; el.className="msg "+(ok?"ok":"ko"); }
+
+  function poste(url,corps){
+    return fetch(url,{method:"POST",credentials:"same-origin",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(corps)})
+      .then(function(r){ return r.json().then(function(j){ j._code=r.status; return j; }); });
+  }
+
+  $("f-co").addEventListener("submit",function(e){
+    e.preventDefault();
+    var b=$("co-go"), m=$("co-msg");
+    b.disabled=true; dire(m,"Vérification en cours…",true);
+    poste("/auth/connexion",{email:$("co-mail").value,mdp:$("co-mdp").value})
+      .then(function(j){
+        if(j.ok){ dire(m,"Accès accordé, ouverture du terminal…",true); location.href="/terminal"; }
+        else { dire(m,j.erreur||"Connexion impossible."); b.disabled=false; }
+      })
+      .catch(function(){ dire(m,"Serveur injoignable, réessayez dans un instant."); b.disabled=false; });
+  });
+
+  $("f-de").addEventListener("submit",function(e){
+    e.preventDefault();
+    var b=$("de-go"), m=$("de-msg");
+    b.disabled=true; dire(m,"Envoi en cours…",true);
+    poste("/auth/demande",{
+      email:$("de-mail").value, nom:$("de-nom").value, prenom:$("de-prenom").value,
+      profession:$("de-prof").value, telephone:$("de-tel").value, mdp:$("de-mdp").value})
+      .then(function(j){
+        if(j.ok){
+          $("f-de").reset();
+          dire(m,"Demande transmise. Vous recevrez l'accès dès que l'administrateur l'aura validée.",true);
+        } else { dire(m,j.erreur||"Demande refusée."); }
+        b.disabled=false;
+      })
+      .catch(function(){ dire(m,"Serveur injoignable, réessayez dans un instant."); b.disabled=false; });
   });
 
   /* ---------- sessions des marchés, heure de Paris ---------- */
