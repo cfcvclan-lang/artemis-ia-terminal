@@ -601,6 +601,55 @@ def decider(email: str, action: str, source_config: Optional[str] = None) -> Dic
     return {"ok": True}
 
 
+# -------------------------------------------------------------- sauvegarde externe
+# Le disque de Render est ephemere sur le plan gratuit : la base SQLite est perdue
+# a chaque redemarrage. Ces deux fonctions servent a sauvegarder/restaurer la table
+# des comptes vers GitHub (voir le mecanisme equivalent pour partage.json dans main.py).
+
+def exporter_utilisateurs() -> List[Dict[str, Any]]:
+    """Image complete de la table utilisateurs, pour sauvegarde externe."""
+    with _verrou:
+        c = cx()
+        r = c.execute("SELECT * FROM utilisateurs").fetchall()
+    return [dict(x) for x in r]
+
+
+def importer_utilisateurs(lignes: List[Dict[str, Any]]) -> int:
+    """Repeuple la table utilisateurs a partir d'une image sauvegardee. Ignore les
+    comptes deja presents en base (notamment l'administrateur, recree a chaque
+    demarrage par bootstrap_admin depuis les variables Render). Renvoie le nombre
+    de comptes ajoutes."""
+    if not lignes:
+        return 0
+    n = 0
+    with _verrou:
+        c = cx()
+        for u in lignes:
+            email = (u.get("email") or "").strip().lower()
+            if not email:
+                continue
+            if c.execute("SELECT email FROM utilisateurs WHERE email=?", (email,)).fetchone():
+                continue
+            c.execute(
+                "INSERT INTO utilisateurs (email,nom,prenom,profession,telephone,empreinte,sel,"
+                "role,statut,motif,cree,decide,vu) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (email, u.get("nom", ""), u.get("prenom", ""), u.get("profession", ""),
+                 u.get("telephone", ""), u.get("empreinte", ""), u.get("sel", ""),
+                 u.get("role", "membre"), u.get("statut", "attente"), u.get("motif", ""),
+                 int(u.get("cree") or 0), int(u.get("decide") or 0), int(u.get("vu") or 0)),
+            )
+            n += 1
+        c.commit()
+    return n
+
+
+def nb_utilisateurs() -> int:
+    with _verrou:
+        c = cx()
+        n = c.execute("SELECT COUNT(*) n FROM utilisateurs").fetchone()
+    return int(n["n"])
+
+
 # le nouveau venu herite des listes, pas de l'etat d'ecran ni du panneau d'administration
 VOLATILES = ("view", "base", "src", "zoom", "q", "strike", "mm")
 

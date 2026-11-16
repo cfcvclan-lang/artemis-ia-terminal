@@ -47,17 +47,17 @@ except Exception as _e:          # pragma: no cover
 else:
     MOTIF_COMPTES = ""
 
-# Taux souverains et CDS de Boursorama, ABC Bourse en secours. Facultatif lui aussi.
-try:
-    import sources_fr
-except Exception:                # pragma: no cover
-    sources_fr = None
-
 # Page d'introduction, sans connexion
 try:
     from intro import INTRO
 except Exception:                # pragma: no cover
     INTRO = ""
+
+# Panneau d'administration (demandes, comptes, mots de passe, journal)
+try:
+    from admin import ADMIN
+except Exception:                # pragma: no cover
+    ADMIN = ""
 
 app = FastAPI(title="Artemis IA Terminal API", version="9.0")
 app.add_middleware(
@@ -370,20 +370,6 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
     syms = [s.strip() for s in symbols.split(",") if s.strip()][:400]
     out: Dict[str, dict] = {}
     todo: List[str] = []
-    # lignes de taux sans cotation Yahoo : Boursorama, cloture de la veille
-    if sources_fr is not None:
-        reste = []
-        for s in syms:
-            if s in sources_fr.LIGNES_ND or s.upper().startswith("BRS:"):
-                try:
-                    rec = sources_fr.cotation(s)
-                except Exception:
-                    rec = None
-                if rec:
-                    out[s] = rec
-            else:
-                reste.append(s)
-        syms = reste
     for s in syms:
         hit = cache_get("q:" + s, QUOTE_TTL)
         if hit:
@@ -431,221 +417,6 @@ RANGE_MAP = {"1d": ("1d", "5m"), "5d": ("5d", "30m"), "1mo": ("1mo", "1d"),
              "6mo": ("6mo", "1d"), "ytd": ("ytd", "1d"), "1y": ("1y", "1d"),
              "3y": ("3y", "1d"), "5y": ("5y", "1d"), "max": ("max", "1d")}
 
-# =====================================================================
-#  Historique des taux et des CDS repris de Boursorama
-# =====================================================================
-#  Boursorama ne livre pas d'historique exploitable. Chaque cloture lue sur
-#  ses pages est donc consignee dans un registre : un fichier sur le disque
-#  du serveur et, si ARTX_GITHUB_TOKEN est defini, une copie sur la branche
-#  de donnees du depot, qui survit aux redeploiements du plan gratuit.
-#  Quand une serie officielle existe, elle sert de fond de courbe :
-#  Bundesbank au jour le jour pour l'Allemagne, BCE en moyenne mensuelle
-#  pour le 10 ans francais, italien et espagnol.
-
-REG_NOM = "historique_taux_cds.json"
-REG_GH_DELAI = 600.0
-_REG: Dict[str, Any] = {"h": None, "sha": None, "timer": None, "etat": "inactif"}
-_REG_VERROU = threading.Lock()
-
-
-def _reg_fichier():
-    return os.path.join(os.path.dirname(_itx_fichier()), REG_NOM)
-
-
-def _gh_fichier_lire(chemin):
-    import base64
-    if not GH_TOKEN:
-        return None, None
-    try:
-        r = requests.get("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, chemin),
-                         params={"ref": GH_BRANCHE}, headers=_gh_entetes(), timeout=15)
-        if r.status_code == 200:
-            j = r.json()
-            return json.loads(base64.b64decode(j.get("content") or "").decode("utf-8")), j.get("sha")
-    except Exception:
-        pass
-    return None, None
-
-
-def _reg_charger():
-    with _REG_VERROU:
-        if _REG["h"] is not None:
-            return _REG["h"]
-        h = {}
-        try:
-            with open(_reg_fichier(), "r", encoding="utf-8") as f:
-                h = json.load(f)
-        except Exception:
-            h = {}
-        if not isinstance(h, dict):
-            h = {}
-        _REG["h"] = h
-    if not h and GH_TOKEN:
-        distant, sha = _gh_fichier_lire(REG_NOM)
-        if isinstance(distant, dict):
-            with _REG_VERROU:
-                for code, serie in distant.items():
-                    if isinstance(serie, dict):
-                        _REG["h"].setdefault(code, {}).update(serie)
-                _REG["sha"] = sha
-    return _REG["h"]
-
-
-def _reg_gh_ecrire():
-    import base64
-    with _REG_VERROU:
-        corps = json.dumps(_REG["h"] or {}, separators=(",", ":"), sort_keys=True)
-    try:
-        if not _gh_branche():
-            _REG["etat"] = "branche introuvable"
-            return
-        if not _REG["sha"]:
-            _, _REG["sha"] = _gh_fichier_lire(REG_NOM)
-        data = {"message": "Releve quotidien des taux et CDS", "branch": GH_BRANCHE,
-                "content": base64.b64encode(corps.encode("utf-8")).decode("ascii")}
-        if _REG["sha"]:
-            data["sha"] = _REG["sha"]
-        r = requests.put("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, REG_NOM),
-                         headers=_gh_entetes(), json=data, timeout=20)
-        if r.status_code in (200, 201):
-            _REG["sha"] = r.json()["content"]["sha"]
-            _REG["etat"] = "ok"
-        else:
-            _REG["sha"] = None
-            _REG["etat"] = "ecriture %s" % r.status_code
-    except Exception as ex:
-        _REG["etat"] = str(ex)[:120]
-
-
-def reg_noter(date: str, valeurs: Dict[str, float]):
-    """Consigne les clotures d'une date. Une valeur deja connue n'est pas reecrite."""
-    h = _reg_charger()
-    neuf = False
-    with _REG_VERROU:
-        for code, v in valeurs.items():
-            if v is None:
-                continue
-            serie = h.setdefault(code, {})
-            if serie.get(date) != v:
-                serie[date] = v
-                neuf = True
-            if len(serie) > 2600:
-                for d in sorted(serie)[:-2600]:
-                    serie.pop(d, None)
-        if not neuf:
-            return
-        try:
-            tmp = _reg_fichier() + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(h, f, separators=(",", ":"))
-            os.replace(tmp, _reg_fichier())
-        except Exception:
-            pass
-    if GH_TOKEN and _REG["timer"] is None:
-        def _go():
-            _REG["timer"] = None
-            _reg_gh_ecrire()
-        _REG["timer"] = threading.Timer(REG_GH_DELAI, _go)
-        _REG["timer"].daemon = True
-        _REG["timer"].start()
-
-
-def reg_serie(code: str):
-    h = _reg_charger()
-    with _REG_VERROU:
-        serie = dict(h.get(code) or {})
-    return sorted(serie.items())
-
-
-if sources_fr is not None:
-    sources_fr.NOTER = reg_noter
-
-JOURS_PLAGE = {"1d": 3, "5d": 8, "1mo": 32, "6mo": 186, "1y": 370, "3y": 1100, "5y": 1830, "max": 20000}
-# fond de courbe officiel, par code de taux
-FOND_BCE = {"FRA:TEC:10": "M.FR.L.L40.CI.0000.EUR.N.Z", "10A:FRANCE": "M.FR.L.L40.CI.0000.EUR.N.Z",
-            "ITA:BM:10": "M.IT.L.L40.CI.0000.EUR.N.Z", "10A:ITALIE": "M.IT.L.L40.CI.0000.EUR.N.Z",
-            "ESP:BM:10": "M.ES.L.L40.CI.0000.EUR.N.Z", "10A:ESPAGNE": "M.ES.L.L40.CI.0000.EUR.N.Z"}
-# legacy : lignes allemandes du terminal
-HIST_TAUX_BBK = {"ND:ALLEMAGNE_2A": "DEU:BM:2", "ND:ALLEMAGNE_10A": "DEU:BM:10"}
-
-
-def _cle_bbk(code: str):
-    """DEU:BM:10 ou 10A:ALLEMAGNE -> serie Bundesbank a la meme echeance."""
-    if code == "10A:ALLEMAGNE":
-        ans = 10
-    else:
-        m = re.match(r"^DEU:BM:(\d+)$", code)
-        if not m:
-            return None
-        ans = int(m.group(1))
-    if not 1 <= ans <= 30:
-        return None
-    return "D.I.ZST.ZI.EUR.S1311.B.A604.R%02dXX.R.A.A._Z._Z.A" % ans
-
-
-def _code_de(symbol: str):
-    if symbol.upper().startswith("BRS:"):
-        return symbol[4:].upper()
-    if sources_fr is not None and symbol in sources_fr.LIGNES_ND:
-        return sources_fr.LIGNES_ND[symbol][0]
-    return None
-
-
-def _histoire_taux(symbol: str, plage: str) -> dict:
-    import datetime as _dt
-    code = _code_de(symbol)
-    vide = {"t": [], "c": [], "at": int(time.time() * 1000), "src": "aucune"}
-    if not code:
-        return vide
-    officiel, src = [], []
-    cle = _cle_bbk(code)
-    if cle:
-        try:
-            officiel = bbk_series(cle, n=2600)
-            src.append("Bundesbank, quotidien")
-        except Exception:
-            officiel = []
-    elif code in FOND_BCE:
-        try:
-            officiel = [(d + "-15" if len(d) == 7 else d, v) for d, v in ecb_series("IRS", FOND_BCE[code], n=240)]
-            src.append("BCE, moyennes mensuelles")
-        except Exception:
-            officiel = []
-    releves = reg_serie(code)
-    if releves and not cle:
-        src.append("releves Boursorama")
-        debut_rel = releves[0][0]
-        obs = [o for o in officiel if o[0] < debut_rel] + releves
-    else:
-        obs = officiel or releves
-        if releves and not officiel:
-            src.append("releves Boursorama")
-    if plage == "ytd":
-        debut = _dt.date(_dt.date.today().year, 1, 1)
-    else:
-        debut = _dt.date.today() - _dt.timedelta(days=JOURS_PLAGE.get(plage, 1830))
-    T, C = [], []
-    for d, v in obs:
-        try:
-            dd = _dt.date.fromisoformat(d[:10])
-        except Exception:
-            continue
-        if dd >= debut and v is not None:
-            T.append(int(time.mktime(dd.timetuple()) * 1000) + 12 * 3600 * 1000)
-            C.append(v)
-    sortie = {"t": T, "c": C, "at": int(time.time() * 1000), "src": " + ".join(src) or "aucune"}
-    if len(C) < 2:
-        n = len(releves)
-        if n == 0:
-            debut_txt = "aucune cloture relevee pour l'instant"
-        else:
-            j = releves[0][0]
-            debut_txt = "1 cloture relevee, celle du %s/%s/%s" % (j[8:10], j[5:7], j[:4])
-        sortie["note"] = ("Historique en constitution : %s. "
-                          "La courbe se trace des la deuxieme cloture." % debut_txt)
-    return sortie
-
-
 @app.get("/api/history")
 def history(symbol: str, range: str = "5y"):
     key = f"h:{symbol}:{range}"
@@ -653,11 +424,6 @@ def history(symbol: str, range: str = "5y"):
     if hit:
         return JSONResponse(hit, headers={"Cache-Control": "no-store"})
     rng, interval = RANGE_MAP.get(range, ("5y", "1d"))
-    if symbol in HIST_TAUX_BBK or symbol.startswith("ND:") or symbol.upper().startswith("BRS:"):
-        payload = _histoire_taux(symbol, range)
-        if len(payload["c"]) >= 2:     # une courbe en constitution n'est pas figee en cache
-            cache_put(key, payload)
-        return JSONResponse(payload, headers={"Cache-Control": "no-store"})
     payload = None
     try:
         payload = yh_chart(symbol, rng, interval)
@@ -920,15 +686,6 @@ def _resoudre_taux(spec: str):
         elif src == "bbk":
             obs = bbk_series(code)
             rec["freq"] = "quotidien"
-        elif src in ("brs", "abc") and sources_fr is not None:
-            r = sources_fr.taux(code if src == "brs" else "ABC:" + code)
-            rec.update({"v": r["v"], "date": r.get("date"), "d": r.get("var"),
-                        "w": None, "m": None, "ytd": None, "freq": "veille",
-                        "fournisseur": r["src"]})
-            cache_put("taux:" + spec, rec)
-            sortie = dict(base)
-            sortie.update(rec)
-            return sortie
         else:
             raise RuntimeError("source inconnue : " + src)
         rec.update({"v": obs[-1][1], "date": obs[-1][0],
@@ -1674,6 +1431,98 @@ def _p_enregistrer():
     _gh_planifier()
 
 
+# --------------------------------------------------- sauvegarde GitHub des comptes
+# Meme mecanisme que partage.json ci-dessus (meme token, meme depot, meme branche),
+# mais pour la table des comptes : sur le plan gratuit de Render le disque est
+# ephemere, donc sans cette sauvegarde les comptes et leurs mots de passe seraient
+# perdus a chaque redemarrage une fois passe en mode base de donnees.
+GH_CHEMIN_COMPTES = "comptes.json"
+_C_GH = {"sha": None, "timer": None, "etat": "inactif", "erreur": None}
+
+
+def _c_gh_lire():
+    import base64
+    if not GH_TOKEN:
+        return None
+    try:
+        r = requests.get("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, GH_CHEMIN_COMPTES),
+                         params={"ref": GH_BRANCHE}, headers=_gh_entetes(), timeout=15)
+        if r.status_code == 200:
+            j = r.json()
+            _C_GH["sha"] = j.get("sha")
+            _C_GH["etat"] = "ok"
+            return json.loads(base64.b64decode(j.get("content") or "").decode("utf-8"))
+        _C_GH["etat"] = "absent" if r.status_code == 404 else "erreur"
+        _C_GH["erreur"] = "lecture %s" % r.status_code
+    except Exception as ex:
+        _C_GH["etat"], _C_GH["erreur"] = "erreur", str(ex)[:160]
+    return None
+
+
+def _c_gh_ecrire():
+    import base64
+    try:
+        lignes = comptes.exporter_utilisateurs()
+    except Exception as ex:
+        _C_GH["etat"], _C_GH["erreur"] = "erreur", str(ex)[:160]
+        return
+    corps = json.dumps({"maj": int(time.time()), "utilisateurs": lignes}, ensure_ascii=False, indent=1)
+    try:
+        if not _gh_branche():
+            _C_GH["etat"], _C_GH["erreur"] = "erreur", "branche introuvable ou droits insuffisants"
+            return
+        if not _C_GH["sha"]:
+            _c_gh_lire()
+        data = {"message": "Sauvegarde des comptes du terminal", "branch": GH_BRANCHE,
+                "content": base64.b64encode(corps.encode("utf-8")).decode("ascii")}
+        if _C_GH["sha"]:
+            data["sha"] = _C_GH["sha"]
+        r = requests.put("https://api.github.com/repos/%s/contents/%s" % (GH_REPO, GH_CHEMIN_COMPTES),
+                         headers=_gh_entetes(), json=data, timeout=20)
+        if r.status_code in (200, 201):
+            _C_GH["sha"] = r.json()["content"]["sha"]
+            _C_GH["etat"], _C_GH["erreur"] = "ok", None
+        elif r.status_code == 409:
+            _C_GH["sha"] = None
+            _c_gh_planifier(5)
+        else:
+            _C_GH["etat"], _C_GH["erreur"] = "erreur", "ecriture %s" % r.status_code
+    except Exception as ex:
+        _C_GH["etat"], _C_GH["erreur"] = "erreur", str(ex)[:160]
+
+
+def _c_gh_planifier(delai=8):
+    if not GH_TOKEN:
+        return
+    t = _C_GH.get("timer")
+    if t:
+        t.cancel()
+    _C_GH["timer"] = threading.Timer(delai, _c_gh_ecrire)
+    _C_GH["timer"].daemon = True
+    _C_GH["timer"].start()
+
+
+def _c_restaurer_si_vide():
+    """Au demarrage, si la base de comptes est vide (disque ephemere redemarre
+    en mode base de donnees), on la repeuple avec la derniere sauvegarde GitHub."""
+    if not COMPTES_DISPO or comptes.mode_env() or not GH_TOKEN:
+        return
+    try:
+        if comptes.nb_utilisateurs():
+            return
+        g = _c_gh_lire()
+        if g and isinstance(g.get("utilisateurs"), list):
+            n = comptes.importer_utilisateurs(g["utilisateurs"])
+            if n:
+                comptes.noter("restauration", "", "%d compte(s) restaure(s) depuis GitHub" % n)
+    except Exception:
+        pass
+
+
+if COMPTES_DISPO and not comptes.mode_env():
+    _c_restaurer_si_vide()
+
+
 def _p_ensemble(liste, ajout, retrait):
     out = [x for x in liste if x not in set(retrait or [])]
     for x in ajout or []:
@@ -1834,17 +1683,6 @@ def rapprocher(nom: str, table: dict):
     return meilleur if score >= 0.75 else None
 
 
-def _cds_boursorama():
-    """Table des entreprises suivies par Boursorama, cle de rapprochement ICE."""
-    if sources_fr is None:
-        return {}, None
-    try:
-        d = sources_fr.cds()
-    except Exception:
-        return {}, None
-    return {_cle_emetteur(r["nom"]): r for r in d.get("entreprises", [])}, d
-
-
 @app.get("/api/cds")
 def cds(q: str = ""):
     """Spreads 5 ans. Sans parametre, toute la table. Avec q, les noms demandes."""
@@ -1854,7 +1692,6 @@ def cds(q: str = ""):
     noms = [x.strip() for x in q.split("|") if x.strip()][:200]
     table = d.get("emetteurs") or {}
     sortie = {}
-    brs, brs_d = None, None
     for n in noms:
         trouve = rapprocher(n, table)
         if trouve:
@@ -1862,113 +1699,9 @@ def cds(q: str = ""):
                          "dev": trouve["dev"], "ans": trouve["ans"],
                          "rang": trouve.get("rang_univers"),
                          "percentile": trouve.get("percentile")}
-            continue
-        # ICE ne la couvre pas : la liste Boursorama prend le relais
-        if brs is None:
-            brs, brs_d = _cds_boursorama()
-        trouve = rapprocher(n, brs) if brs else None
-        if trouve:
-            sortie[n] = {"spread": trouve["spread"], "emetteur": trouve["nom"],
-                         "dev": "EUR", "ans": 5.0, "var": trouve.get("var"),
-                         "source": "Boursorama", "fr": "J-1",
-                         "asof": (brs_d or {}).get("asof")}
     return JSONResponse({"asof": d.get("asof"), "n": d.get("n"), "source": d.get("source"),
                          "quartiles": d.get("quartiles"), "trouves": sortie},
                         headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/cds/marche")
-def cds_marche():
-    """CDS 5 ans souverains et grandes entreprises, cloture de la veille (Boursorama)."""
-    if sources_fr is None:
-        return JSONResponse({"err": "module sources_fr absent"}, status_code=503)
-    try:
-        return JSONResponse(sources_fr.cds(), headers={"Cache-Control": "no-store"})
-    except Exception as exc:
-        return JSONResponse({"err": str(exc)[:200], "souverains": [], "entreprises": []},
-                            headers={"Cache-Control": "no-store"})
-
-
-@app.get("/api/diag/sources")
-def diag_sources(format: str = "html"):
-    """Teste depuis cet hebergeur chaque source de taux et de CDS, sans cache."""
-    rapport: Dict[str, Any] = {}
-    if sources_fr is not None:
-        rapport.update(sources_fr.diagnostic())
-    else:
-        rapport["boursorama"] = {"ok": False, "err": "module sources_fr absent"}
-    t0 = time.time()
-    try:
-        obs = bbk_series(BBK_SERIES[3][2], n=5)
-        rapport["bundesbank"] = {"ok": True, "n": len(obs), "fraicheur": "quotidien",
-                                 "echantillon": {"Allemagne 10 ans " + obs[-1][0]: obs[-1][1]}}
-    except Exception as exc:
-        rapport["bundesbank"] = {"ok": False, "err": str(exc)[:200]}
-    rapport["bundesbank"]["ms"] = int((time.time() - t0) * 1000)
-    # controle croise : le Bund 10 ans de Boursorama face au releve officiel.
-    # La Bundesbank publie une courbe zero-coupon estimee, Boursorama le
-    # rendement du titre de reference : quelques points d'ecart sont normaux.
-    t0 = time.time()
-    try:
-        offi = bbk_series(BBK_SERIES[3][2], n=5)[-1]
-        brs = sources_fr.taux("DEU:BM:10")["v"] if sources_fr is not None else None
-        if brs is None:
-            raise RuntimeError("Boursorama indisponible")
-        ecart = round((brs - offi[1]) * 100.0, 1)
-        rapport["controle_bund_10ans"] = {"ok": abs(ecart) <= 15, "boursorama": brs,
-                                          "bundesbank": offi[1], "date_bundesbank": offi[0],
-                                          "ecart_pb": ecart, "seuil_pb": 15}
-    except Exception as exc:
-        rapport["controle_bund_10ans"] = {"ok": False, "err": str(exc)[:200]}
-    rapport["controle_bund_10ans"]["ms"] = int((time.time() - t0) * 1000)
-    t0 = time.time()
-    try:
-        d = charger_cds()
-        rapport["ice_cds_entreprises"] = {"ok": bool(d.get("n")), "n": d.get("n"),
-                                          "dernier_calcul": d.get("asof")}
-    except Exception as exc:
-        rapport["ice_cds_entreprises"] = {"ok": False, "err": str(exc)[:200]}
-    rapport["ice_cds_entreprises"]["ms"] = int((time.time() - t0) * 1000)
-    hote = os.environ.get("RENDER_EXTERNAL_URL", "local")
-    if format == "json":
-        return JSONResponse({"hote": hote, "sources": rapport}, headers={"Cache-Control": "no-store"})
-    return HTMLResponse(_page_diag(hote, rapport), headers={"Cache-Control": "no-store"})
-
-
-def _page_diag(hote: str, rapport: Dict[str, Any]) -> str:
-    noms = {"boursorama_taux": "Boursorama, taux France (TEC et benchmarks)",
-            "boursorama_taux_allemagne": "Boursorama, taux Allemagne (benchmarks)",
-            "boursorama_cds": "Boursorama, CDS 5 ans",
-            "abcbourse_taux": "ABC Bourse, taux (secours)",
-            "bundesbank": "Bundesbank, courbe allemande (controle officiel)",
-            "ice_cds_entreprises": "ICE Clear Credit, CDS entreprises",
-            "controle_bund_10ans": "Contr\u00f4le crois\u00e9, Bund 10 ans Boursorama contre Bundesbank"}
-    from html import escape as e
-    lignes = []
-    for k, v in rapport.items():
-        ok = v.get("ok")
-        detail = v.get("err") or ", ".join(
-            "%s : %s" % (a, b) for a, b in v.items()
-            if a not in ("ok", "ms", "echantillon", "err"))
-        ech = v.get("echantillon") or {}
-        ech_txt = ", ".join("%s %s" % (a, b) for a, b in ech.items())
-        lignes.append(
-            "<tr><td>%s</td><td class='%s'>%s</td><td>%s</td><td>%s</td><td>%s ms</td></tr>" % (
-                e(noms.get(k, k)), "ok" if ok else "ko", "Répond" if ok else "En échec",
-                e(str(detail)), e(ech_txt), v.get("ms", "")))
-    return """<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Diagnostic des sources</title><style>
-:root{color-scheme:dark}body{margin:0;background:#000;color:#e6e0d4;font:13px "IBM Plex Mono",ui-monospace,Menlo,monospace;padding:18px 16px}
-h1{font:600 20px system-ui;color:#ffa028;margin:0 0 4px}p{color:#8d867a;margin:0 0 14px;line-height:1.5}
-table{border-collapse:collapse;width:100%%;max-width:1200px}th{background:#0d2a47;color:#8fd0ff;text-align:left;padding:7px 9px;font-weight:500}
-td{padding:8px 9px;border-bottom:1px solid #1c2124;vertical-align:top}.ok{color:#00d46a}.ko{color:#ff3b30}
-a{color:#ffa028}@media(max-width:760px){td,th{display:block}tr{display:block;border-bottom:1px solid #262c30;padding:6px 0}th{display:none}}
-</style></head><body><h1>Diagnostic des sources de taux et de CDS</h1>
-<p>Test fait à l'instant depuis %s, sans cache. Boursorama et ABC Bourse publient des clôtures de la veille, pas du temps réel.
-<a href="?format=json">Version JSON</a></p>
-<table><tr><th>Source</th><th>État</th><th>Détail</th><th>Échantillon</th><th>Durée</th></tr>%s</table></body></html>""" % (
-        e(hote), "".join(lignes))
 
 
 # =====================================================================
@@ -2315,6 +2048,8 @@ async def auth_demande(request: Request):
     except Exception:
         return JSONResponse({"ok": False, "erreur": "Requete illisible."}, status_code=400)
     r = comptes.creer_demande(corps if isinstance(corps, dict) else {})
+    if r.get("ok"):
+        _c_gh_planifier()
     return JSONResponse(r, status_code=200 if r.get("ok") else 400)
 
 
@@ -2374,7 +2109,14 @@ async def auth_motdepasse(request: Request):
         return JSONResponse({"ok": False, "erreur": "Session expiree."}, status_code=401)
     corps = await request.json()
     r = comptes.changer_mdp(u["email"], corps.get("ancien", ""), corps.get("nouveau", ""))
+    if r.get("ok"):
+        _c_gh_planifier()
     return JSONResponse(r, status_code=200 if r.get("ok") else 400)
+
+
+@app.get("/admin/")
+async def admin_page(request: Request):
+    return HTMLResponse(ADMIN)
 
 
 @app.get("/admin/comptes")
@@ -2407,6 +2149,7 @@ async def admin_decision(request: Request):
     if r.get("ok"):
         r["comptes"] = comptes.liste()
         r["attente"] = comptes.en_attente()
+        _c_gh_planifier()
     return JSONResponse(r, status_code=200 if r.get("ok") else 400)
 
 
@@ -2431,6 +2174,8 @@ async def admin_reinitialiser(request: Request):
         c.execute("UPDATE utilisateurs SET empreinte=?, sel=? WHERE email=?", (emp, sel, email))
         c.commit()
     comptes.fermer_toutes(email)
+    comptes.noter("reinitialisation", email, "mot de passe change par l'administrateur")
+    _c_gh_planifier()
     return {"ok": True}
 
 
