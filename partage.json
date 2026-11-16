@@ -1,10 +1,22 @@
 {
- "v": 3,
- "maj": 1794846480378,
+ "v": 12,
+ "maj": 1794846586917,
  "doc": {
   "custom": {},
   "wl": [],
-  "removed": {},
+  "removed": {
+   "INDEX": [
+    "^SXEP",
+    "^SX7E",
+    "^SX8P",
+    "^SXPP",
+    "^SXAP",
+    "^SXQP",
+    "^SXOP",
+    "^SX6P",
+    "^SP500-10"
+   ]
+  },
   "order": {
    "FOREX": [
     "USDJPY=X",
