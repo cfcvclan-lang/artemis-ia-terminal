@@ -832,6 +832,7 @@ body.confort .itx-t td{padding:9px 8px}
         <button class="rb" type="button" data-r="1y">1A</button>
         <button class="rb" type="button" data-r="3y">3A</button>
         <button class="rb" type="button" data-r="5y">5A</button>
+        <button class="rb" type="button" data-r="max">MAX</button>
       </div>
       <div class="chartbar">
         <button class="rb" type="button" data-mm="20">MM20</button>
@@ -914,6 +915,7 @@ body.confort .itx-t td{padding:9px 8px}
       <button class="rb" type="button" data-fr="1y">1A</button>
       <button class="rb" type="button" data-fr="3y">3A</button>
       <button class="rb" type="button" data-fr="5y">5A</button>
+      <button class="rb" type="button" data-fr="max">MAX</button>
     </div>
     <span class="cmd-sep"></span>
     <div class="ranges">
@@ -2907,6 +2909,7 @@ function loadChart(){
      .catch(function(){
         var full=(HIST[y]&&(!HIST[y].demo||mode==="demo"))?HIST[y]:(mode==="demo"?demoHist(y):null);
         if(!full) return {t:[],c:[]};
+        if(r==="max") return {t:full.t,c:full.c};
         var span={"1d":1,"5d":5,"1mo":31,"6mo":183,"ytd":0,"1y":365,"3y":1095,"5y":1825}[r];
         var from = r==="ytd"? (function(){var d=new Date();d.setMonth(0,1);d.setHours(0,0,0,0);return d.getTime();})() : Date.now()-span*DAY;
         var T=[],C=[]; for(var i=0;i<full.t.length;i++){ if(full.t[i]>=from){T.push(full.t[i]);C.push(full.c[i]);} }
@@ -5141,6 +5144,32 @@ function brancherPincement(cv,getCtx){
 }
 brancherPincement($("cv"),function(){ return CTX; });
 brancherPincement($("cvfull"),function(){ return CTXF; });
+
+/* molette de souris sur le graphique plein ecran : ajuste la fenetre temporelle affichee */
+function brancherMolette(cv,getCtx){
+  if(!cv||cv.__molette) return; cv.__molette=1;
+  var raf=0, diff=null;
+  cv.addEventListener("wheel",function(ev){
+    var ctx=getCtx(); if(!ctx||!ctx.c) return;
+    var total=(CH.c||[]).length; if(total<8) return;
+    if(ev.cancelable) ev.preventDefault();
+    var r=cv.getBoundingClientRect();
+    var f=Math.max(0,Math.min(1,(ev.clientX-r.left-ctx.PL)/ctx.w));
+    var z=cfg.zoom, a=(z&&z.a!=null)?z.a:0, b=(z&&z.b!=null)?z.b:total;
+    var span=b-a, pivot=a+f*span;
+    var sens=ev.deltaY<0?1:-1; /* molette vers le haut (loin de soi) = zoom avant */
+    var facteur=Math.exp(-sens*0.18);
+    var nvSpan=Math.round(Math.max(6,Math.min(total,span*facteur)));
+    var na=Math.round(pivot-f*nvSpan), nb=na+nvSpan;
+    if(na<0){ nb-=na; na=0; }
+    if(nb>total){ na-=(nb-total); nb=total; }
+    na=Math.max(0,na);
+    cfg.zoom=(na<=0&&nb>=total)?null:{a:na,b:nb};
+    if(!raf) raf=requestAnimationFrame(function(){ raf=0; redraw(); });
+    clearTimeout(diff); diff=setTimeout(function(){ save(); },250);
+  },{passive:false});
+}
+brancherMolette($("cvfull"),function(){ return CTXF; });
 
 /* ---------- clavier ---------- */
 document.addEventListener("keydown",function(e){
