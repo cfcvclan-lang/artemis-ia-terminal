@@ -409,7 +409,7 @@ def quotes(symbols: str = Query(..., description="liste separee par des virgules
 
 RANGE_MAP = {"1d": ("1d", "5m"), "5d": ("5d", "30m"), "1mo": ("1mo", "1d"),
              "6mo": ("6mo", "1d"), "ytd": ("ytd", "1d"), "1y": ("1y", "1d"),
-             "3y": ("3y", "1d"), "5y": ("5y", "1d")}
+             "3y": ("3y", "1d"), "5y": ("5y", "1d"), "max": ("max", "1d")}
 
 @app.get("/api/history")
 def history(symbol: str, range: str = "5y"):
