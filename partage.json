@@ -1,11 +1,22 @@
 {
- "v": 2,
- "maj": 1794842266837,
+ "v": 3,
+ "maj": 1794846480378,
  "doc": {
   "custom": {},
   "wl": [],
   "removed": {},
-  "order": {},
+  "order": {
+   "FOREX": [
+    "USDJPY=X",
+    "USDCHF=X",
+    "GBPUSD=X",
+    "EURUSD=X",
+    "EURJPY=X",
+    "EURGBP=X",
+    "EURCHF=X",
+    "CHFEUR=X"
+   ]
+  },
   "hidden": []
  }
 }
