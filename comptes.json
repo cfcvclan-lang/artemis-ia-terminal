@@ -1,5 +1,5 @@
 {
- "maj": 1794860508,
+ "maj": 1794920690,
  "utilisateurs": [
   {
    "email": "othman@artemis-ia.com",
@@ -7,44 +7,29 @@
    "prenom": "",
    "profession": "Administrateur",
    "telephone": "",
-   "empreinte": "de78d8b66187ec1e1a3ebcc5d35517e61cf05494a2c3812d54799374ab650a05",
-   "sel": "79662592c9d18b463ae92e82148139fb",
+   "empreinte": "42b441263aec81ba532d53e012a7d9f58527c5c242fc1928de9b9aa6e7af2066",
+   "sel": "9884f35b234d01f8947dc926e8f999c5",
    "role": "admin",
    "statut": "actif",
    "motif": "",
-   "cree": 1794860438,
-   "decide": 1794860438,
+   "cree": 1794920433,
+   "decide": 1794920433,
    "vu": 1
   },
   {
-   "email": "structuration@artemis-ia.com",
-   "nom": "Artemis",
-   "prenom": "Structuration",
-   "profession": "Membre Artemis",
-   "telephone": "0000000000",
-   "empreinte": "5d76a21281877556953a1398642185be8195961b5917b13fcdb511498eaebbfd",
-   "sel": "a3534ea11292de124b09dc81caf8c80a",
+   "email": "a.bakh@yahoo.fr",
+   "nom": "Bakhtaoui",
+   "prenom": "Ahmed",
+   "profession": "Papa",
+   "telephone": "0661066610",
+   "empreinte": "8256c04f7405638a303d1bd5737493a8fe796ab732a128628b734783d631a4c0",
+   "sel": "d0aef6136cf138d1cfcc0423cd00a680",
    "role": "membre",
-   "statut": "actif",
+   "statut": "attente",
    "motif": "",
-   "cree": 1794860490,
-   "decide": 1794860490,
-   "vu": 1
-  },
-  {
-   "email": "theo@artemis-ia.com",
-   "nom": "Artemis",
-   "prenom": "Theo",
-   "profession": "Membre Artemis",
-   "telephone": "0000000000",
-   "empreinte": "60a26bdfe3ae7385285844a9fcdf70a979cd1f22bed5de11eb4d84fe2d83cd11",
-   "sel": "4cc641368e1d32ed93df796beab32e7d",
-   "role": "membre",
-   "statut": "actif",
-   "motif": "",
-   "cree": 1794860491,
-   "decide": 1794860491,
-   "vu": 1
+   "cree": 1794920682,
+   "decide": 0,
+   "vu": 0
   }
  ]
 }
