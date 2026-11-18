@@ -1,5 +1,5 @@
 {
- "maj": 1794920690,
+ "maj": 1794989695,
  "utilisateurs": [
   {
    "email": "othman@artemis-ia.com",
@@ -7,27 +7,27 @@
    "prenom": "",
    "profession": "Administrateur",
    "telephone": "",
-   "empreinte": "42b441263aec81ba532d53e012a7d9f58527c5c242fc1928de9b9aa6e7af2066",
-   "sel": "9884f35b234d01f8947dc926e8f999c5",
+   "empreinte": "e5e3ba30b0019305d9b0487275f08d718da01adb08af76cefbf156d49b3d364c",
+   "sel": "2ebd204363b33a5c8ba5cf20bd5dadf9",
    "role": "admin",
    "statut": "actif",
    "motif": "",
-   "cree": 1794920433,
-   "decide": 1794920433,
+   "cree": 1794988908,
+   "decide": 1794988908,
    "vu": 1
   },
   {
-   "email": "a.bakh@yahoo.fr",
-   "nom": "Bakhtaoui",
-   "prenom": "Ahmed",
-   "profession": "Papa",
-   "telephone": "0661066610",
-   "empreinte": "8256c04f7405638a303d1bd5737493a8fe796ab732a128628b734783d631a4c0",
-   "sel": "d0aef6136cf138d1cfcc0423cd00a680",
+   "email": "j.lacassagne@platon-finance.fr",
+   "nom": "Lacassagne",
+   "prenom": "Jules",
+   "profession": "Directeur Commercial Platon",
+   "telephone": "+33685714983",
+   "empreinte": "d38e57dc3bf295785d0654604003db8ac238b72c1d8137b3ab7b996456397278",
+   "sel": "df42b591302b8cc30eda2b750ae3c3a6",
    "role": "membre",
    "statut": "attente",
    "motif": "",
-   "cree": 1794920682,
+   "cree": 1794989687,
    "decide": 0,
    "vu": 0
   }
