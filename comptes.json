@@ -1,5 +1,5 @@
 {
- "maj": 1794989695,
+ "maj": 1794989772,
  "utilisateurs": [
   {
    "email": "othman@artemis-ia.com",
@@ -25,11 +25,11 @@
    "empreinte": "d38e57dc3bf295785d0654604003db8ac238b72c1d8137b3ab7b996456397278",
    "sel": "df42b591302b8cc30eda2b750ae3c3a6",
    "role": "membre",
-   "statut": "attente",
+   "statut": "actif",
    "motif": "",
    "cree": 1794989687,
-   "decide": 0,
-   "vu": 0
+   "decide": 1794989764,
+   "vu": 1
   }
  ]
 }
