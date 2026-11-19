@@ -1,6 +1,6 @@
 {
- "v": 13,
- "maj": 1795081268939,
+ "v": 14,
+ "maj": 1795093262245,
  "doc": {
   "custom": {
    "IA": [
@@ -8,6 +8,13 @@
      "n": "Space X",
      "y": "spcx",
      "c": "USD",
+     "t": "EQ",
+     "perso": 1
+    },
+    {
+     "n": "Soitec",
+     "y": "soi.pa",
+     "c": "EUR",
      "t": "EQ",
      "perso": 1
     }
