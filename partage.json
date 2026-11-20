@@ -1,6 +1,6 @@
 {
- "v": 14,
- "maj": 1795093262245,
+ "v": 15,
+ "maj": 1795133444878,
  "doc": {
   "custom": {
    "IA": [
@@ -34,18 +34,7 @@
     "^SP500-10"
    ]
   },
-  "order": {
-   "FOREX": [
-    "USDJPY=X",
-    "USDCHF=X",
-    "GBPUSD=X",
-    "EURUSD=X",
-    "EURJPY=X",
-    "EURGBP=X",
-    "EURCHF=X",
-    "CHFEUR=X"
-   ]
-  },
+  "order": {},
   "hidden": []
  }
 }
